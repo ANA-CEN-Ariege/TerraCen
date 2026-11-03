@@ -142,33 +142,27 @@ Puis committer le `renv.lock` modifié.
 Deux instances cohabitent sur le serveur :
 
 - **Prod** : `/srv/shiny-server/TerraCEN/` — suit un **tag annoté** (`vX.Y[.Z]`) en detached HEAD. Promotion manuelle après validation sur test.
-- **Test** : `/srv/shiny-server/TerraCEN-Test/` — suit **`main` HEAD**, mis à jour par simple `git pull`.
+- **Test** : `/srv/shiny-server/TerraCEN-Test/` — suit **`main` HEAD**.
 
 Les deux instances partagent la **même base de données** : attention aux tests destructifs depuis l'env de test.
 
-`LANG=C.utf8 LC_ALL=C.utf8` est obligatoire avec `sudo -u shiny` (sinon erreurs d'encodage R, notamment `Setting LC_CTYPE failed`). `prompt = FALSE` rend `renv::restore` non-interactif.
-
-#### Déployer une nouvelle release en prod
-
-```bash
-sudo -u shiny LANG=C.utf8 LC_ALL=C.utf8 bash -c '
-  cd /srv/shiny-server/TerraCEN &&
-  git fetch --tags &&
-  git checkout vX.Y &&
-  R -e "renv::restore(prompt = FALSE)"
-'
-sudo -u shiny touch /srv/shiny-server/TerraCEN/restart.txt
-```
-
-Ne jamais faire `git pull` sur la prod : ça la ramènerait sur `main` HEAD avec du WIP non releasé.
+Le déploiement passe par [deploy.sh](deploy.sh), versionné et donc présent dans chaque instance. Il vérifie que l'arbre git est propre, met à jour le code, restaure les paquets (`renv::restore(prompt = FALSE)`), recharge l'application par `restart.txt`, puis arrête les processus R devenus obsolètes. En cas d'échec, il revient à la version précédente. Il pose lui-même `LANG=C.utf8` et `LC_ALL=C.utf8`, sans lesquels R échoue sous `sudo -u shiny` (`Setting LC_CTYPE failed`). Son journal est dans `/var/log/terracen_deploy.log`.
 
 #### Mettre à jour l'env de test
 
 ```bash
-sudo -u shiny LANG=C.utf8 LC_ALL=C.utf8 bash -c '
-  cd /srv/shiny-server/TerraCEN-Test &&
-  git pull &&
-  R -e "renv::restore(prompt = FALSE)"
-'
-sudo -u shiny touch /srv/shiny-server/TerraCEN-Test/restart.txt
+sudo -u shiny -H bash -c '/srv/shiny-server/TerraCEN-Test/deploy.sh'
 ```
+
+Le test suit `main` par `git pull --ff-only` : un historique qui a divergé est refusé.
+
+#### Déployer une nouvelle release en prod
+
+```bash
+sudo -u shiny -H bash -c '/srv/shiny-server/TerraCEN/deploy.sh vX.Y'   # une version précise
+sudo -u shiny -H bash -c '/srv/shiny-server/TerraCEN/deploy.sh'        # la dernière release
+```
+
+Ne jamais faire `git pull` sur la prod : ça la ramènerait sur `main` HEAD avec du WIP non releasé. Le script récupère les tags avec `--prune-tags` : un tag supprimé sur GitHub disparaît aussi du serveur.
+
+`DEPLOY_KILL_STALE=0` laisse vivre les anciens processus R : les sessions en cours sont préservées, mais leur mémoire n'est pas rendue.
