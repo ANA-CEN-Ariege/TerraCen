@@ -1,0 +1,65 @@
+# Annonce les issues et PR du dépôt dans le salon Matrix « github » (espace
+# ANA-CEN Numérique). Le jeton du compte bot est dans le secret MATRIX_TOKEN.
+# Même fichier dans chaque dépôt suivi, au filtre des auteurs près (cf. job).
+name: Notifier Matrix
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  pull_request:
+    types: [opened, closed, reopened]
+
+permissions: {}
+
+jobs:
+  notifier:
+    # Dépôt public : seules les issues et PR des membres du dépôt sont
+    # annoncées. Sans ce filtre, n'importe qui pourrait faire écrire le bot
+    # dans le salon en ouvrant une issue.
+    if: contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association || github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Envoyer le message
+        env:
+          MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
+          SALON: "!l_J-r3xoOnOWllPHFje9c-C5JVKcLMbv2vC-VHAzasg"
+          # Titres et noms passent par l'environnement, jamais directement dans
+          # le script : un titre d'issue pourrait sinon y injecter des commandes.
+          TYPE: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          FUSIONNEE: ${{ github.event.pull_request.merged }}
+          NUMERO: ${{ github.event.issue.number || github.event.pull_request.number }}
+          TITRE: ${{ github.event.issue.title || github.event.pull_request.title }}
+          LIEN: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
+          AUTEUR: ${{ github.event.sender.login }}
+          DEPOT: ${{ github.event.repository.name }}
+        run: |
+          if [ -z "$MATRIX_TOKEN" ]; then
+            echo "::warning::Secret MATRIX_TOKEN absent : pas de message envoyé"
+            exit 0
+          fi
+
+          case "$TYPE/$ACTION" in
+            issues/opened)          quoi="Issue #$NUMERO ouverte" ;;
+            issues/closed)          quoi="Issue #$NUMERO fermée" ;;
+            issues/reopened)        quoi="Issue #$NUMERO rouverte" ;;
+            pull_request/opened)    quoi="PR #$NUMERO ouverte" ;;
+            pull_request/reopened)  quoi="PR #$NUMERO rouverte" ;;
+            pull_request/closed)
+              if [ "$FUSIONNEE" = true ]; then quoi="PR #$NUMERO fusionnée"
+              else quoi="PR #$NUMERO fermée sans fusion"; fi ;;
+          esac
+
+          salon=$(jq -rn --arg s "$SALON" '$s | @uri')
+          jq -n --arg depot "$DEPOT" --arg quoi "$quoi" --arg auteur "$AUTEUR" \
+                --arg titre "$TITRE" --arg lien "$LIEN" '{
+              msgtype: "m.notice",
+              body: "[\($depot)] \($quoi) par \($auteur) : \($titre)\n\($lien)",
+              format: "org.matrix.custom.html",
+              formatted_body: @html "<b>[\($depot)]</b> \($quoi) par \($auteur) : <a href=\"\($lien)\">\($titre)</a>"
+            }' \
+            | curl -sS --fail-with-body --retry 3 -X PUT \
+                -H "Authorization: Bearer $MATRIX_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data @- \
+                "https://matrix-client.matrix.org/_matrix/client/v3/rooms/$salon/send/m.room.message/gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"

@@ -1,0 +1,30 @@
+0.65 :
+  - Suppression du bouton "Supprimer" dans l'édition des utilisateurs
+  - Vérification de l'existence de l'utilisateur connecté dans la base utilisateurs 
+0.61 :
+  - ajout conditionnel (Evaluation = OUI) du champ "Document d'évaluation" dans le gormulaire d'edition des docs de gestion
+  
+0.60 : 
+  - ajout onglet "Docs gestion" pour les documents de gestion
+  - Pour un document de gestion, droits de lecture pour tout le monde et d'edition pour admin et RS responsable d'au moins un site lié au document
+  
+0.5
+  - ajout de la gestion des droits : admin (AD), Responsable de site (RS), Animateur de site (AN) et Invité (IN)
+  
+0.4
+  - ajout du mécanisme d'identification sur Microsoft Azure
+  
+0.3 :
+  - création d'un contrat foncier par défaut quand on crée un site avec le nom ‘Préfiguration <nom du site> »
+	- lors de l’affectation de parcelles au site, lors du choix du contrat, ce contrat  est proposé par défaut
+
+0.21 :
+  - construction du sélecteur "Géologie » dans le formulaire de création de site du module Sites en utilisant la logique de la table dico_geologie
+	- renommage Animations en Actions
+	- Dans Actions, par défaut, affichage de la carte avec les cercles comme pour Sites et Parcelles
+	- dans Actions, association d'un contrat foncier ou agricole à une action lors de la création. Pas de possibilité de changer en edition
+	- affichage du contrat foncier et/ou agricole sur les info-bulles des cartes
+
+0.2
+  - Ajout de l'onglet "Actions" pour la gestion des actions sur les sites
+  

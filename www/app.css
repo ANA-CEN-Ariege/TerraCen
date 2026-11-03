@@ -1,0 +1,1492 @@
+html { overflow-y: auto; scrollbar-gutter: stable; }
+@supports not (scrollbar-gutter: stable) { html { overflow-y: scroll; } }
+body { overflow-y: scroll !important; }
+
+/* =========================================================================
+   Jetons — source unique des couleurs et des mesures de l'interface.
+
+   L'étape 1 de la refonte avait NOMMÉ les 31 teintes qui vivaient en dur
+   dans la feuille, sans en changer aucune : c'est ce qui rend l'étape 6
+   possible en un seul endroit, au lieu d'une chasse dans mille lignes.
+   ========================================================================= */
+:root{
+  /* Mesures */
+  --left-rail-w: 260px;  /* largeur colonne gauche des onglets */
+  --rail-pad-y: 16px;    /* padding vertical colonne gauche des onglets */
+  --rail-pad-x: 20px;    /* padding horizontal colonne gauche des onglets */
+
+  /* Hauteur utile d'une page d'onglet.
+
+     Mesurée sur le rendu réel (Chrome, de 1100 à 1920 px de large, valeur
+     stable) : la barre du haut fait 54 px, la barre d'onglets 45 px plus
+     10 px de marge, et les deux .right-rail-inner imbriqués ajoutent chacun
+     24 px de padding vertical, et la barre porte un filet d'1 px depuis
+     l'étape 6. Soit 158 px au-dessus de la zone utile.
+     (Elle valait 160 avant le passage à Bootstrap 5 : la barre d'onglets
+     suit la taille du texte, passée de 16 à 14 px.)
+
+     Les trois pages à carte réservaient min-height:100vh à l'intérieur de
+     cette zone : elles débordaient donc de ces 160 px, et l'ascenseur était
+     permanent, carte vide comprise. */
+  --h-travail: calc(100vh - 158px);
+  /* Page à deux étages, carte en haut et tableau en bas. 0,72 rend à la carte
+     la hauteur qu'elle avait à 60vh : c'est l'ascenseur qui disparaît, pas
+     la carte qui rétrécit. */
+  --h-carte: calc(var(--h-travail) * 0.72);
+
+  /* Taille du texte des boutons. Bootstrap les met à 16 px (14 en .btn-sm),
+     ce qui est lourd dans une colonne de travail où ils s'empilent. */
+  --t-bouton:    13px;
+  --t-bouton-sm: 12px;
+
+  /* Rayons : un pour ce qui se saisit ou se clique, un pour les blocs, un
+     pour les objets flottants posés sur la carte. */
+  --r-champ:    6px;
+  --r-bloc:     12px;
+  --r-flottant: 8px;
+
+  /* Palette — les huit teintes de la maquette, étape 6 de la refonte.
+
+     Les 32 jetons de l'étape 1 nommaient les teintes héritées de deux
+     systèmes superposés : le thème Bootstrap « lumen » et une palette
+     ardoise ajoutée en cours de route. Beaucoup étaient des doublons à deux
+     points près — #f8fafc et #f7f7f7, #ddd et #d4d4d8, #ccc et #cbd5e1.
+     Ils se réduisent ici aux huit de la maquette, et les noms disent
+     désormais le rôle, non la couleur.
+
+     Les gris sont biaisés vers le vert plutôt que neutres, et l'accent est
+     un vert de pin : aucune de ces teintes n'entre en conflit avec les
+     bleus, orangés et jaunes déjà pris par les couches de la carte, qui
+     restent des constantes R et ne bougent pas. */
+  --c-surface:      #ffffff;
+  --c-fond:         #f6f7f5;
+  --c-encre:        #1a211d;
+  --c-encre-douce:  #5c6861;
+  --c-trait:        #dfe3de;
+  --c-accent:       #2f5d50;
+  /* Neuvième teinte, hors maquette : le vert de pin est juste pour du texte
+     mais lourd en aplat. Les boutons prennent ce vert nettement plus clair.
+     Le texte des boutons reste blanc sur demande : le contraste y vaut 3,43
+     contre 1, sous les 4,5 demandés par AA pour du texte de cette taille.
+     Pour le retrouver sans assombrir la teinte, il faudrait un texte sombre ;
+     pour le retrouver en gardant le blanc, #3a7a6b (5,03). */
+  --c-accent-vif:   #4a9884;
+  --c-accent-fond:  #e4ece8;
+  --c-signal:       #b4551f;
+  /* Voile de l'accent, pour la couronne du chargement de carte. */
+  --c-accent-voile: rgba(47, 93, 80, .25);
+
+  /* Ombres */
+  --o-faible:  rgba(0,0,0,.06);
+  --o-moyenne: rgba(0,0,0,.08);
+  --o-forte:   rgba(0,0,0,.2);
+  /* Halo de prise de focus, dérivé de --c-bleu. */
+  --o-focus:   rgba(47,93,80,.18);
+
+  --panel-bg: var(--c-surface);
+}
+
+/* =========================================================================
+   Mode sombre.
+
+   Le sélecteur de la barre du haut (bslib::input_dark_mode) pose
+   data-bs-theme="dark" sur <html> : Bootstrap 5.3 y bascule ses propres
+   variables, et les huit jetons basculent ici sur le second jeu de la
+   maquette — mêmes rôles, même famille, valeurs inversées.
+
+   --bs-body-bg et --bs-body-color sont ramenés sur nos jetons : sans cela,
+   le gris #222 de Bootstrap apparaîtrait partout où la feuille ne peint pas.
+
+   Les variables de DataTables sont redéclarées sur l'enveloppe du tableau et
+   non ici : elles sont posées sur .dataTables_wrapper, un ancêtre plus proche
+   que <html>, qui l'emporterait.
+   ========================================================================= */
+[data-bs-theme="dark"]{
+  --c-surface:      #191e1a;
+  --c-fond:         #11150f;
+  --c-encre:        #e9ece8;
+  --c-encre-douce:  #9aa69f;
+  --c-trait:        #2c342e;
+  --c-accent:       #79b8a4;
+  --c-accent-vif:   #79b8a4;
+  --c-accent-fond:  #1d2a26;
+  --c-signal:       #e08a52;
+  --c-accent-voile: rgba(121, 184, 164, .25);
+  --o-focus:        rgba(121, 184, 164, .28);
+
+  --bs-body-bg:     var(--c-fond);
+  --bs-body-color:  var(--c-encre);
+}
+/* Sur fond sombre, une ombre portée ne se voit pas : c'est un halo plus
+   marqué qui détache le médaillon, pas un liseré, qui jurerait avec le blanc
+   du logo. */
+[data-bs-theme="dark"] .welcome-logo{
+  box-shadow: 0 4px 28px rgba(0, 0, 0, .55);
+}
+
+[data-bs-theme="dark"] .dataTables_wrapper{
+  --dt-row-selected: 121, 184, 164;
+  --dt-row-hover:    121, 184, 164;
+  /* La zébrure de DataTables est un noir à 2,4 % : invisible sur fond sombre. */
+  --dt-row-stripe:   255, 255, 255;
+}
+
+/* Bootstrap compile les couleurs de boutons en dur : elles ne suivent ni le
+   mode, ni le vert plus clair réservé aux aplats. On repasse par ses propres
+   variables de bouton plutôt que par background-color, pour que le survol et
+   l'état actif suivent aussi.
+
+   En clair, seuls le fond et le trait changent : le survol et l'état actif
+   restent ceux de Bootstrap, plus sombres, et donnent le retour attendu. */
+.btn-primary,
+.btn-success{
+  --bs-btn-bg:           var(--c-accent-vif);
+  --bs-btn-border-color: var(--c-accent-vif);
+  --bs-btn-color:        #fff;
+  --bs-btn-hover-color:  #fff;
+  --bs-btn-active-color: #fff;
+}
+
+/* En sombre, le vert est trop lumineux pour du texte blanc : il porte du
+   texte sombre, et le survol passe par la luminosité faute d'une teinte de
+   plus. */
+[data-bs-theme="dark"] .btn-primary,
+[data-bs-theme="dark"] .btn-success{
+  --bs-btn-bg:                var(--c-accent);
+  --bs-btn-border-color:      var(--c-accent);
+  --bs-btn-color:             var(--c-fond);
+  --bs-btn-hover-bg:          var(--c-accent);
+  --bs-btn-hover-border-color: var(--c-accent);
+  --bs-btn-hover-color:       var(--c-fond);
+  --bs-btn-active-bg:         var(--c-accent);
+  --bs-btn-active-border-color: var(--c-accent);
+  --bs-btn-active-color:      var(--c-fond);
+}
+[data-bs-theme="dark"] .btn-danger,
+[data-bs-theme="dark"] .btn-warning{
+  --bs-btn-bg:                var(--c-signal);
+  --bs-btn-border-color:      var(--c-signal);
+  --bs-btn-color:             var(--c-fond);
+  --bs-btn-hover-bg:          var(--c-signal);
+  --bs-btn-hover-border-color: var(--c-signal);
+  --bs-btn-hover-color:       var(--c-fond);
+  --bs-btn-active-bg:         var(--c-signal);
+  --bs-btn-active-border-color: var(--c-signal);
+  --bs-btn-active-color:      var(--c-fond);
+}
+[data-bs-theme="dark"] .btn-primary:hover,
+[data-bs-theme="dark"] .btn-success:hover,
+[data-bs-theme="dark"] .btn-danger:hover,
+[data-bs-theme="dark"] .btn-warning:hover{ filter: brightness(1.12); }
+
+/* Les liens de Bootstrap s'éclaircissent tout seuls en mode sombre, mais
+   vers une teinte qui n'est pas la nôtre. Bootstrap 5.3 calcule leur couleur
+   à partir des COMPOSANTES (--bs-link-color-rgb), pas de --bs-link-color :
+   redéfinir ce dernier seul ne change rien. */
+[data-bs-theme="dark"]{
+  --bs-link-color-rgb:       121, 184, 164;
+  --bs-link-hover-color-rgb: 121, 184, 164;
+}
+
+/* Selectize écrit son blanc en dur : son champ et son déroulant resteraient
+   blancs sur une page sombre. */
+[data-bs-theme="dark"] .selectize-input,
+[data-bs-theme="dark"] .selectize-input.focus,
+[data-bs-theme="dark"] .selectize-dropdown,
+[data-bs-theme="dark"] .selectize-dropdown .active{
+  background: var(--c-surface);
+  color: var(--c-encre);
+}
+[data-bs-theme="dark"] .selectize-dropdown .active{ background: var(--c-accent-fond); }
+
+/* En clair, le fond de page est légèrement plus sombre que les surfaces ;
+   en sombre c'est l'inverse, et un en-tête de tableau en --c-fond se
+   confondrait avec la page. Le fond d'accent l'en détache. */
+[data-bs-theme="dark"] .table.dataTable > thead > tr > th{
+  background: var(--c-accent-fond);
+}
+
+/* =========================
+   Grille principale
+   ========================= */
+.flex-container{
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;   /* écart fixe entre colonnes */
+  margin: 0;   /* pas de marge parasite */
+}
+
+/* Colonne gauche harmonisée (utilise les variables ci-dessus) */
+.sidebar-left-custom{
+  flex: 0 0 var(--left-rail-w);
+  width: var(--left-rail-w);
+  min-width: var(--left-rail-w);
+  max-width: var(--left-rail-w);
+  box-sizing: border-box;
+  padding: var(--rail-pad-y) var(--rail-pad-x);
+  margin: 0;
+  background: var(--panel-bg);
+  border-radius: var(--r-bloc);
+  box-shadow: 0 1px 6px var(--o-faible);
+}
+
+/* éviter les “dents” verticales dues aux marges par défaut */
+.sidebar-left-custom > *:first-child{ margin-top:0 !important; }
+.sidebar-left-custom > *:last-child{margin-bottom:0 !important; }
+
+/* titres/paragraphes uniformes */
+.sidebar-left-custom h1,
+.sidebar-left-custom h2,
+.sidebar-left-custom h3,
+.sidebar-left-custom h4,
+.sidebar-left-custom h5,
+.sidebar-left-custom p{
+  margin-top:0;
+  margin-bottom:10px;
+}
+
+/* espacement des blocs de formulaires (Bootstrap/Shiny) */
+.sidebar-left-custom .shiny-input-container,
+.sidebar-left-custom .form-group{
+  margin-bottom:12px;/* même valeur partout */
+}
+
+/* boutons pleine largeur + léger espacement */
+.sidebar-left-custom .btn{
+  width:100%;
+  margin-top:6px;
+}
+
+/* traits de séparation sobres et réguliers */
+.sidebar-left-custom hr{
+  margin:12px 0;
+}
+
+/* corrige les marges de Selectize / shinyWidgets éventuelles */
+.sidebar-left-custom .selectize-control{ margin-bottom:12px; }
+.sidebar-left-custom .form-check{ margin-bottom:12px; }
+
+/* 🔹 Menu déroulant du pickerInput */
+  .bootstrap-select .dropdown-menu {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Plein écran d'une page à carte (app.js). C'est le BLOC entier qui passe en
+   plein écran, carte et barre d'actions comprises : la barre reste à sa place
+   dans le DOM, et c'est tout l'intérêt. La carte prend ce que la barre laisse.
+
+   :fullscreen vaut pour l'élément mis en plein écran par le navigateur.
+   La hauteur de la carte est posée en ligne par leafletOutput, d'où le
+   !important pour la lui rendre. */
+.tc-page-carte:fullscreen{
+  min-height: 0;
+  padding: 10px 14px;
+  background: var(--c-surface);
+}
+.tc-page-carte:fullscreen > .leaflet{
+  height: auto !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tc-page-carte:fullscreen > .tc-page-bas{ flex: 0 0 auto; }
+
+/* La barre est alors tout en bas de l'écran : le déroulant du champ
+   propriétaire doit s'ouvrir vers le HAUT, sinon il sort de la fenêtre.
+   Selectize pose un `top` en ligne à chaque ouverture, d'où le !important ;
+   `bottom: 100%` l'ancre au-dessus du champ, .selectize-control étant en
+   position relative. */
+.tc-page-carte:fullscreen .selectize-dropdown{
+  top: auto !important;
+  bottom: 100%;
+  margin-bottom: 2px;
+  border-radius: var(--r-champ);
+}
+
+/* Barre au pied de la carte */
+.map-footer {
+  display: flex;
+  align-items: flex-end;/* ✅ aligne tout sur le bas */
+  gap: 12px;
+  padding: 8px 0;
+}
+.map-footer .spacer { flex: 1; }
+
+.map-footer .bootstrap-select { margin-bottom: 0; }
+
+/* Colonne du sélecteur */
+.map-footer .field-stack {
+  min-width: 320px; max-width: 520px; flex: 0 0 40%;
+  display: flex; flex-direction: column; justify-content: flex-end;/* ✅ label + input au bas */
+}
+.map-footer .field-stack .form-group { margin: 0; }/* ✅ supprime la marge Bootstrap */
+.map-footer label { margin-bottom: 4px; }/* label compact */
+
+/* Harmonisation visuelle */
+.map-footer .btn { margin-bottom: 0; }
+
+/* 🔹 Les items (choix dans la liste) gardent leur style */
+.bootstrap-select .dropdown-menu li a {
+  background-color: transparent !important;
+  color: black !important; /* tu peux changer la couleur du texte */
+}
+.bootstrap-select .dropdown-menu li a:hover {
+  background-color: var(--c-fond) !important; /* couleur au survol */
+}
+/* Colonne des cases à cocher du tableau des actions : juste la case.
+   (Remplace l'ancienne règle .af-edit-col, dont le tableau #af_table et la
+   classe ont disparu avec le mode liste.) */
+table.dataTable td.tc-check-col,
+table.dataTable th.tc-check-col {
+  width: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Champs, boutons et modales : les jetons jusque dans Bootstrap.
+
+   Le thème lumen donne aux champs un trait #e7e7e7, une ombre interne et un
+   halo bleu clair à la prise de focus ; aux modales un rayon de 5 px et une
+   ombre à 50 % de noir ; et selectize ajoute ses propres #ccc et #66afe9.
+   Autant de gris et de bleus qui ne venaient d'aucun jeton.
+--------------------------------------------------------------------------- */
+.form-control,
+.selectize-input{
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-champ);
+  box-shadow: none;
+}
+.form-control:focus,
+.selectize-input.focus,
+.selectize-control.single .selectize-input.input-active{
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--o-focus);
+  outline: 0;
+}
+.selectize-dropdown{
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-champ);
+  box-shadow: 0 6px 18px var(--o-moyenne);
+}
+
+/* Encadré léger : reprend le rôle de .well, que Bootstrap 5 a supprimé. */
+.tc-encadre{
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--c-fond);
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-champ);
+}
+
+/* Bloc de lecture seule : la description d'une action, rendue en HTML et
+   bornée en hauteur. Les quatre propriétés étaient posées en ligne depuis
+   mod_actions.R, avec un #f9f9f9 et un #eee de plus. */
+.tc-bloc-lecture{
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 15px;
+  background: var(--c-fond);
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-champ);
+}
+
+/* « btn-default », que Shiny donne à tout bouton sans classe — et à tous les
+   modalButton(), qui n'acceptent pas d'argument de classe — n'est PAS sans
+   style : bslib le fait suivre .btn-secondary, par une règle
+   `.btn-default:not(.btn-primary):not(.btn-success)…` à neuf classes de
+   spécificité. Ne pas tenter de le redéfinir ici : une règle simple perd
+   contre elle, et gagne en revanche contre .btn-primary sur les boutons qui
+   portent les deux — ce que fait tout actionButton(class = "btn-primary").
+   Mesuré : un tel bouton sortait blanc à texte sombre. */
+
+.btn{
+  border-radius: var(--r-champ);
+  font-size: var(--t-bouton);
+  /* lumen marque ses boutons d'un bord bas de 4 px — border-width: 0 1px 4px
+     1px — qui se lit comme une ombre portée, et d'un décalage au clic. Un
+     trait régulier suffit. */
+  border-width: var(--bs-btn-border-width);
+  box-shadow: none;
+}
+.btn:active,
+.btn:first-child:active,
+.btn.active{
+  margin-top: 0;
+  border-top-width: var(--bs-btn-border-width);
+}
+.btn-sm, .btn-xs{ font-size: var(--t-bouton-sm); }
+/* L'en-tête des modales : titre à gauche, croix à droite. La croix est
+   ajoutée par app.js à l'ouverture ; la règle garantit l'alignement même si
+   l'en-tête porte autre chose. */
+.modal-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header > .btn-close{ margin-left: auto; }
+/* Le contour natif de Bootstrap 3 (outline: 5px auto) est illisible sur un
+   bouton coloré ; le halo reprend celui des champs. */
+.btn:focus,
+.btn.focus,
+.btn:active:focus,
+.btn.active:focus{
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--o-focus);
+}
+
+.modal-content{
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-bloc);
+  box-shadow: 0 18px 48px var(--o-forte);
+}
+.modal-header{ border-bottom: 1px solid var(--c-trait); }
+.modal-footer{ border-top: 1px solid var(--c-trait); }
+.modal-title{
+  font-weight: 700;
+  color: var(--c-encre);
+}
+
+/* ---------------------------------------------------------------------------
+   Tableaux.
+
+   DataTables 2 ne pose plus la zébrure, le survol et la ligne sélectionnée
+   par un fond, mais par une ombre interne réglée par trois propriétés
+   personnalisées : les redéfinir est le seul moyen d'agir dessus. Elles sont
+   déclarées sur l'enveloppe du tableau et non sur :root, parce que la feuille
+   de DT est injectée au premier rendu d'un tableau, donc APRÈS celle-ci — un
+   ancêtre plus proche l'emporte quel que soit l'ordre des feuilles.
+
+   DT veut les composantes séparément, pas un #rrggbb : 47, 93, 80 est la
+   valeur de --c-accent, et le bleu cyan de DT (0, 136, 204) n'appartient à
+   aucune palette de l'application.
+--------------------------------------------------------------------------- */
+.dataTables_wrapper{
+  --dt-row-selected: 47, 93, 80;
+  --dt-row-hover:    47, 93, 80;
+}
+
+/* La forme .table > thead > tr > th de Bootstrap est plus spécifique que
+   table.dataTable thead th : on l'égale pour que l'en-tête suive. */
+.table.dataTable > thead > tr > th{
+  background: var(--c-fond);
+  border-bottom: 2px solid var(--c-trait);
+  color: var(--c-encre);
+  font-weight: 600;
+}
+.table.dataTable > tbody > tr > td{
+  border-top: 1px solid var(--c-trait);
+}
+
+.dataTables_wrapper .pagination > li > a,
+.dataTables_wrapper .pagination > li > span{
+  border-color: var(--c-trait);
+  color: var(--c-encre-douce);
+}
+.dataTables_wrapper .pagination > .active > a,
+.dataTables_wrapper .pagination > .active > a:hover,
+.dataTables_wrapper .pagination > .active > span{
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-surface);
+}
+
+/* --- Ossature générale: barre du haut + zone de travail --- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Barre du haut (étape 2, recolorée à l'étape 6). Le bleu plein du rail
+   vertical qu'elle remplaçait cède la place à la surface claire et au filet
+   de la maquette : l'accent ne sert plus de fond, il sert de signal. */
+.tc-topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  background: var(--c-surface);
+  color: var(--c-encre);
+  border-bottom: 1px solid var(--c-trait);
+}
+.tc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.brand-logo {
+  height: 38px;
+  width: auto;
+  display: block;
+}
+.tc-brand-name {
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: 0.3px;
+}
+.tc-brand-sub {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--c-encre-douce);
+}
+
+.tc-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+.app-version {
+  font-size: 11px;
+  color: var(--c-encre-douce);
+}
+
+.tc-topbar .user-info { color: var(--c-encre-douce); }
+.right-rail {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* avant: overflow:hidden;-> on le garde ou on l'enlève, mais on ajoute: */
+  min-height: 0; /* essentiel pour autoriser le scroll des enfants */
+}
+/* Le tabset de Shiny doit se comporter comme une colonne flexible */
+.right-rail > .tabbable,
+.right-rail .tab-content,
+.right-rail .tab-pane.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0; /* indispensable pour que le scroll apparaisse */
+  overflow: hidden;/* on garde les débordements dans l'enfant suivant */
+}
+.right-rail-inner {
+  padding: 12px 16px;
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* marge des onglets Bootstrap */
+.right-rail .nav-tabs {
+  margin: 10px 16px 0 16px;
+}
+
+/* Page à deux étages : Sites, Actions et Stratégie foncière portaient le même
+   style en ligne, recopié trois fois. Le bas prend ce que la carte laisse. */
+.tc-page-carte {
+  display: flex;
+  flex-direction: column;
+  min-height: var(--h-travail);
+}
+.tc-page-carte > .tc-page-bas { flex: 1 1 auto; }
+
+/* Responsive : la barre du haut passe à la ligne sur petits écrans */
+@media (max-width: 900px) {
+  .tc-topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    row-gap: 8px;
+  }
+  .tc-brand-sub { display: none; }
+  .right-rail .nav-tabs { margin: 8px 8px 0 8px; }
+  .right-rail-inner { padding: 10px; }
+}
+
+.note-editor{width:100%;}",
+
+.note-editor .note-toolbar .dropdown-menu { z-index: 2050; }
+.modal .note-editor { z-index: 2051; }
+
+/* Dans un modal, forcer le menu Selectize au-dessus de tout */
+.modal .selectize-control { overflow: visible !important; }
+.modal .selectize-dropdown {
+  position: absolute !important;
+  z-index: 4000 !important;      /* > modal (~1050) et éditeurs WYSIWYG */
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.bootstrap-select .dropdown-menu {
+  top: 100% !important;
+  bottom: auto !important;
+}
+/* s’assure que la droite ne pousse pas la grille */
+#tab-anim .right-rail,
+#tab-anim .right-rail-inner{
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+}
+
+/* anti-saut dû à l’ascenseur (déjà proposé) */
+html{ overflow-y:auto; scrollbar-gutter:stable; }
+@supports not (scrollbar-gutter:stable){ html{ overflow-y:scroll; } }
+
+/* 1) Autoriser le flex-item de droite à rétrécir */
+.right-rail {
+  min-width: 0;               /* CRUCIAL avec flexbox */
+}
+
+/* 2) Un wrapper explicite autour de la DT pour le scroll horizontal */
+.dt-hscroll {
+  overflow-x: auto;            /* affiche l’ascenseur quand nécessaire */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 3) Laisse DataTables gérer sa largeur; pas de width auto forcé ici */
+.dataTables_wrapper table {
+  width: 100%;
+}
+
+/* (Optionnel) Si tu veux éviter que les cellules explosent la mise en page */
+table.dataTable table.dataTable {
+  white-space: nowrap;         /* scroll plutôt que retour à la ligne */
+}
+
+.dataTables_wrapper .dataTable {
+  table-layout: auto !important;
+}
+
+/* (Optionnel alternatif) Si tu préfères des en-têtes sur plusieurs lignes
+   pour réduire la largeur totale, remets ce sélecteur à normal uniquement
+   pour THEAD (garde nowrap en tbody) */
+table.dataTable thead th {
+  white-space: normal;
+}
+table.dataTable tbody td { 
+  white-space: normal; 
+} 
+
+/* Variante globale (moins stricte, mais rapide pour tester) */
+.leaflet-container { min-height: 300px; }
+
+
+
+/* Les parents flex des tables doivent pouvoir rétrécir */
+.flex-container { min-width: 0; }
+.right-rail-inner, .dt-hscroll { min-width: 0; }
+
+/* Le wrapper horizontal doit pouvoir scroller */
+.dt-hscroll { overflow: auto; }
+
+/* Évite les largeurs figées imposées par certains thèmes */
+table.dataTable { table-layout: auto !important; }
+
+/* Avec scrollX, Chrome fige parfois l’en-tête : force 100% */
+.dt-hscroll .dataTables_wrapper .dataTables_scrollHeadInner,
+.dt-hscroll .dataTables_wrapper .dataTables_scrollHeadInner table {
+  width: 100% !important;
+
+
+}
+/* Force la largeur du sélecteur Géologie (ID namespacé) */
+[id$="geol_menu_wrap"]{
+  width:260px !important;
+  max-width:260px !important;
+  display:inline-block !important;
+  flex:0 0 auto !important;
+  align-self:flex-start !important;
+}
+
+/* Dans votre app.css */
+.geo-breadcrumbs{
+  margin-top: .5rem;
+  font-size: .95rem;
+  line-height: 1.35;
+  color: var(--c-encre-douce);
+}
+.geo-breadcrumb-item{
+  padding: .25rem 0;
+  border-left: 3px solid var(--c-trait);
+  padding-left: .5rem;
+  word-break: break-word;
+}
+
+/* Cache uniquement la section Overlays (et le séparateur) quand .no-overlays est posé sur le conteneur de la carte */
+.no-overlays .leaflet-control-layers-overlays { display: none !important; }
+.no-overlays .leaflet-control-layers-separator { display: none !important; }
+/* On laisse les base layers visibles */
+
+/* Largeur du sélecteur Géologie */
+#geol_menu_wrap {
+  width: 260px;     /* 🔧 ajuste ici : ex. 240px, 260px, 280px */
+}
+.hh-wrap { position: relative; display: inline-block; }
+.hh-trigger {
+  display:flex; align-items:center; justify-content:space-between;
+  width:300px; padding:8px 12px; border:1px solid var(--c-trait); border-radius:6px;
+  background:var(--c-surface); cursor:pointer; user-select:none;
+}
+.hh-trigger:hover { background:var(--c-fond); }
+    
+:root { --menu-gap: 2px; }
+
+.hh-menu {
+  position: absolute;
+  top: calc(100% + var(--menu-gap));
+  left: 0;
+  z-index: 100000;   /* plus haut que tout */
+  width: 100%;
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-radius: 8px;
+  padding: 6px 0;
+  box-shadow: 0 10px 30px var(--o-moyenne);
+  max-height: none;
+  overflow: visible;
+}
+
+.hh-menu.hidden { display:none; }
+    
+.hh-item { 
+  position: relative;
+  display: flex;     /* ⬅️ Permet de positionner les enfants */
+  align-items: flex-start;   /* ⬅️ Alignement vertical en haut */
+  padding: 4px 12px
+}
+.hh-item:hover { background:var(--c-accent-fond); }
+    
+/* La zone cliquable du texte (wrap multi-lignes) */
+.hh-label{
+    flex: 1;
+    cursor: pointer;
+    display: block;      /* block pour bien prendre la largeur disponible */
+    white-space: normal; /* autorise le retour à la ligne */
+    overflow-wrap: anywhere;     /* casse si un mot est très long */
+    word-break: break-word;      /* support large des césures */
+    line-height: 1.25;   /* lisibilité sur plusieurs lignes */
+}
+
+/* Flèche alignée en haut de la 1ère ligne même si le libellé s’étale */
+.hh-chevron{
+  margin-left: auto;
+  line-height: 1;
+  padding-top: 2px;/* ajuste 0–3px selon ta police */
+  opacity: .6;
+}
+
+.hh-leaf .hh-chevron { display:none; }
+    
+/* Sous-menus : s'ouvrent par-dessus le parent, décalés vers la gauche */
+.hh-sub {
+  position: absolute;
+  top: 20px; /* aligné en haut de l’item parent */
+  left: 50px; /* bien à droite, sans chevauchement */
+  z-index: 100001;/* au-dessus du menu parent */
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 260px;
+  box-shadow: 0 10px 30px var(--o-moyenne);
+  max-height: none;
+  overflow: visible;
+  display: none; /* affiché par .hh-item.open > .hh-sub */
+}
+       
+.hh-item.open > .hh-sub { display: block; }
+.hh-item:focus-within > .hh-sub {
+  display: block;
+}
+.hh-item:focus-within > .hh-sub { display:block; }
+.hh-item, .hh-sub { transition: none; }
+    
+/* (optionnel) indentation visuelle supplémentaire si tu veux */
+.hh-item.level-2 { padding-left:16px; }
+.hh-item.level-3 { padding-left:28px; }
+.hh-item.level-4 { padding-left:40px; }
+
+.hh-menu,
+.hh-menu ul,
+.hh-sub,
+.hh-sub ul {
+  list-style: none !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* Sécurise au cas où des <li> héritent d'un style ailleurs */
+.hh-menu li,
+.hh-sub li,
+.hh-item {
+  list-style: none !important;
+}
+
+/* Pour les navigateurs qui affichent quand même un marqueur */
+.hh-menu li::marker,
+.hh-sub li::marker {
+  content: none;
+}
+
+.af-info-icon {
+    /* Bouton le rendant très petit et en ligne */
+    height: 20px;
+    line-height: 18px;
+    font-size: 10px; /* Taille de l'icône */
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--c-accent); /* Couleur de l'icône (ajustez si besoin) */
+    vertical-align: top; /* Alignement vertical */
+    margin-left: 0px; /* Petite marge avec le label */
+}
+/* Conteneur : la surface vient de la règle commune des objets flottants,
+   plus bas ; ici, seule la compacité propre à la légende. */
+.leaflet-control.legend.legend--mini{
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+/* leafletfix.css impose à la légende un `color: #555` écrit en dur — un gris
+   moyen, illisible sur la surface sombre. Il ne suivait aucun jeton. Les
+   formes `.leaflet .legend` égalent la sienne en spécificité ; app.css étant
+   chargée après, elles l'emportent. */
+.leaflet-control.legend,
+.leaflet .legend{ color: var(--c-encre); }
+.leaflet .legend svg text{ fill: var(--c-encre); }
+.leaflet .legend svg line{ stroke: var(--c-encre); }
+/* Les pastilles de couleur sont posées à 70 % par leafletfix : sur fond
+   sombre, elles perdent la teinte qu'elles sont censées montrer. */
+[data-bs-theme="dark"] .leaflet .legend i{ opacity: 1; }
+
+/* Titre réduit */
+.leaflet-control.legend.legend--mini .legend-title{
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* Interligne des items */
+.leaflet-control.legend.legend--mini .legend-item{
+  margin: 1px 0;
+}
+
+/* Carrés couleur – format Leaflet classique (<i>) */
+.leaflet-control.legend.legend--mini i{
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  margin-right: 6px;
+  /* ne PAS définir background ici: il vient inline par Leaflet */
+}
+
+/* ===== Overlay de chargement de la carte (Sites) ===== */
+.tc-map-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1500;                       /* au-dessus des tuiles et des contrôles Leaflet */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+  pointer-events: none;                /* n'intercepte pas les interactions carte */
+  transition: opacity 0.35s ease;
+}
+.tc-map-loading.tc-hide { opacity: 0; }
+.tc-map-loader {
+  width: 54px;
+  height: 54px;
+  border: 6px solid rgba(57, 99, 170, 0.25);
+  border-top-color: var(--c-accent);
+  border-radius: 50%;
+  animation: tc-spin 0.9s linear infinite;
+}
+.tc-map-loading-txt {
+  margin-top: 12px;
+  color: var(--c-encre);
+  font: 600 14px/1.2 sans-serif;
+}
+@keyframes tc-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================================
+   Styles migrés depuis app.R (tags$style inline) — barre utilisateur,
+   impersonation, écrans d'accueil/chargement, popup des rôles.
+   ========================================================================== */
+
+/* Cartes en pseudo-plein écran (bouton fullscreen, init_map_base) :
+   le plugin passe la carte à z-index 99999 -> on relève les modales
+   Bootstrap (1040/1050 par défaut) pour qu'elles restent visibles et
+   cliquables par-dessus. Les toasts (toastr) sont déjà au-dessus. */
+.modal-backdrop { z-index: 100000 !important; }
+.modal          { z-index: 100001 !important; }
+
+/* -- Barre utilisateur : désormais un élément de la barre du haut, et non
+   plus un bloc posé en absolu par-dessus le rail droit. -- */
+.right-rail { position: relative; }
+.user-info-bar {
+  background: transparent;
+  border: 0;
+}
+
+/* Bloc interne renvoyé par output$user_info_ui */
+.user-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-color: var(--c-accent-fond);
+  color: var(--c-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 26px;
+  user-select: none;
+}
+
+/* 🎭 Pastille cliquable pour un administrateur réel */
+.user-avatar-admin {
+  cursor: pointer;
+}
+.user-avatar-admin:hover {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.6);
+}
+/* 🎭 Pastille quand un profil est emprunté */
+.user-avatar-impersonating {
+  box-shadow: 0 0 0 2px var(--c-signal);
+}
+.impersonation-flag {
+  font-size: 11px;
+  color: var(--c-signal);
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.logout-link {
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--c-encre-douce);
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--c-trait);
+}
+.logout-link:hover {
+  color: var(--c-encre);
+  border-color: var(--c-trait);
+  text-decoration: none;
+  background: var(--c-fond);
+}
+/* Centré dans la FENÊTRE, pas dans le flux : en position fixe et sur toute
+   l'étendue de la vue, le bloc ignore les marges du conteneur qui l'héberge.
+   Avec min-height:70vh, la hauteur réservée valait à peu près celle du
+   contenu : il n'y avait donc aucun jeu pour centrer quoi que ce soit, et le
+   bloc se posait en haut. Le fond est repris du jeton, qui bascule tout seul
+   en mode sombre. */
+.welcome-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;   /* centre le GROUPE de rangées, horizontalement et verticalement */
+  justify-items: center;   /* puis chaque élément dans sa rangée */
+  text-align: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--c-fond);
+  z-index: 1030;
+}
+.welcome-screen h1 { font-size: 2rem; margin-bottom: .25rem; }
+.welcome-screen p  { opacity: .8; }
+
+/* Le papillon, en grand, au-dessus de l'accueil.
+   ⚠️ logo_terracen.png est en RVB SANS canal alpha : son fond est un blanc
+   opaque, mesuré à (253, 254, 254). Posé tel quel sur le fond sombre, il
+   donnerait un carré blanc franc. On l'assume donc en médaillon — fond blanc
+   déclaré, coins arrondis, un peu de marge intérieure — ce qui le rend
+   délibéré dans les deux modes plutôt qu'accidentel dans l'un.
+   Le jour où le logo gagnera une transparence, ce fond et ce rayon pourront
+   tomber ensemble. */
+/* La borne 38vh fait rétrécir le logo sur une fenêtre basse : sans elle, un
+   écran court rognerait le bas du bloc, qu'aucun ascenseur ne rattraperait
+   puisqu'il est en position fixe. */
+.welcome-logo {
+  width: min(280px, 52vw, 38vh);
+  height: auto;
+  display: block;
+  background: #fff;
+  border-radius: 28px;
+  padding: 10px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, .08);
+}
+
+/* Spinner circulaire */
+.loader {
+  width: 64px; height: 64px;
+  border: 6px solid var(--c-trait);
+  border-top-color: var(--c-accent);
+  border-radius: 50%;
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Doux fondu quand l'app apparaît */
+.app-shell {
+  animation: fadeIn .35s ease-out both; /* s'exécutera à l'insertion du DOM */
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Popup des rôles utilisateur (tooltip Bootstrap) */
+.tooltip-inner .user-roles-popup,
+.tooltip-inner .user-roles-popup > div,
+.tooltip-inner {
+  text-align: left !important; /* Priorité maximale */
+}
+.user-roles-popup ul {
+  padding-left: 20px !important; /* Retrait de la puce */
+  margin-bottom: 5px;
+  list-style-position: outside; /* Assure que la puce est visible */
+}
+.user-roles-popup li {
+  text-align: left !important;
+  margin-bottom: 2px;
+}
+
+/* Séparateur entre le bloc « périmètre » et le bloc « parcelle cadastrale »
+   dans l'infobulle d'un périmètre manuel (cf. tc-perim-hover dans app.js). */
+.leaflet-tooltip .tc-tt-sep {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, .25);
+}
+
+/* --- Menu déroulant « Sites » dans la barre d'onglets ----------------------
+   Quatre onglets — Sites, Parcelles, Contrats, Docs de gestion — sont retirés
+   de la barre et regroupés sous une seule entrée. Construit à la main plutôt
+   qu'avec le déroulant de Bootstrap : le thème est en Bootstrap 3 et les
+   attributs diffèrent d'une version à l'autre. Ici, rien ne dépend du JS de
+   Bootstrap. */
+.tc-menu { position: relative; }
+
+.tc-menu > .tc-menu-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+/* La flèche indique qu'il y a un déroulant, et pivote à l'ouverture. */
+.tc-menu > .tc-menu-toggle::after {
+  content: "";
+  display: inline-block;
+  margin-left: 7px;
+  border: 4px solid transparent;
+  border-top-color: currentColor;
+  vertical-align: middle;
+  transform: translateY(2px);
+  transition: transform .15s ease;
+}
+.tc-menu.tc-open > .tc-menu-toggle::after {
+  transform: translateY(-2px) rotate(180deg);
+}
+
+/* position FIXED et non absolute : « .right-rail > .tabbable » porte un
+   overflow:hidden qui enveloppe la barre d'onglets, et rognait le déroulant —
+   seuls les quelques pixels tenant dans la hauteur de la barre restaient
+   visibles. Un élément fixé échappe au rognage de ses ancêtres. Ses
+   coordonnées sont posées par le JS depuis la position du bouton.
+   (Aucun ancêtre ne porte de transform ni de filter, qui en feraient un bloc
+   conteneur et annuleraient l'échappement — vérifié.) */
+.tc-menu-list {
+  display: none;
+  position: fixed;
+  z-index: 1600;          /* au-dessus des panneaux Leaflet et du voile de chargement */
+  min-width: 248px;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .14);
+}
+/* Les items ne doivent hériter d'aucun flottement ni d'aucune mise en forme
+   de la barre d'onglets qui les contient. */
+.tc-menu-list > li {
+  float: none;
+  display: block;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.tc-menu.tc-open > .tc-menu-list { display: block; }
+
+.tc-menu-list > li > a {
+  display: block;
+  padding: 7px 16px;
+  color: var(--c-encre);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.tc-menu-list > li > a:hover,
+.tc-menu-list > li > a:focus { background: var(--c-accent-fond); color: var(--c-accent); }
+.tc-menu-list > li > a.tc-item-active { color: var(--c-accent); font-weight: 600; }
+
+/* L'entrée parente reste visuellement sélectionnée tant qu'on est sur l'un de
+   ses items — Bootstrap ne le fait pas pour un onglet qu'il ne connaît pas. */
+.tc-menu.tc-menu-active > .tc-menu-toggle {
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-bottom-color: transparent;
+  border-radius: 4px 4px 0 0;
+  color: var(--c-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Titre de page, en tête de colonne gauche.
+
+   Les quatre pages du domaine « Sites » vivent sous une même entrée de menu :
+   une fois dedans, la barre d'onglets ne dit plus laquelle est ouverte. Le
+   titre prend donc ce rôle, dans le même bleu que l'entrée de menu active.
+--------------------------------------------------------------------------- */
+.tc-page-title{
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--c-accent);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--c-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Page d'accueil.
+
+   La colonne gauche y porte deux graphiques : les 260 px du rail habituel ne
+   suffisent pas, on l'élargit pour cette page seulement.
+--------------------------------------------------------------------------- */
+.flex-container.tc-accueil{ --left-rail-w: 420px; }
+
+.tc-accueil .sidebar-left-custom{ overflow-y: auto; }
+
+.tc-accueil-bloc{ margin-top: 18px; }
+.tc-accueil-bloc h5{
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--c-encre-douce);
+  margin: 0 0 6px;
+}
+
+/* Chiffre clé : la valeur domine, le libellé situe, la précision désamorce
+   la question « c'est quoi exactement, cette surface ? ». */
+.tc-kpi{
+  padding: 10px 0;
+  border-bottom: 1px solid var(--c-accent-fond);
+}
+.tc-kpi-val{
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--c-accent);
+}
+.tc-kpi-unite{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-accent);
+  margin-left: 4px;
+}
+.tc-kpi-lbl{
+  font-size: 13px;
+  color: var(--c-encre);
+  margin-top: 2px;
+}
+.tc-kpi-sous{
+  font-size: 11.5px;
+  color: var(--c-encre-douce);
+  margin-top: 1px;
+}
+
+.tc-maitrise{ width: 100%; font-size: 13px; }
+.tc-maitrise td{ padding: 4px 0; border-bottom: 1px solid var(--c-fond); }
+.tc-maitrise .tc-maitrise-n{
+  text-align: right;
+  font-weight: 700;
+  color: var(--c-accent);
+  white-space: nowrap;
+  padding-left: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Contrôle des couches en accordéon (www/app.js).
+
+   Le contrôle de Leaflet reste en place : on ne fait qu'habiller les groupes
+   dans lesquels app.js déplace ses <label>.
+--------------------------------------------------------------------------- */
+.tc-lc{ min-width: 190px; }
+
+.tc-lc-grp + .tc-lc-grp{ border-top: 1px solid var(--c-trait); }
+
+.tc-lc-hdr{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px;
+  background: none;
+  border: 0;
+  font: 600 12px/1.2 inherit;
+  color: var(--c-encre);
+  text-align: left;
+  cursor: pointer;
+}
+.tc-lc-hdr:hover{ color: var(--c-accent); }
+
+/* Le chevron dit l'état ; il pivote à l'ouverture. */
+.tc-lc-hdr::before{
+  content: "▸";
+  font-size: 10px;
+  line-height: 1;
+  color: var(--c-encre-douce);
+  transition: transform .15s ease;
+}
+.tc-lc-grp.tc-open > .tc-lc-hdr::before{ transform: rotate(90deg); }
+.tc-lc-grp.tc-open > .tc-lc-hdr{ color: var(--c-accent); }
+
+.tc-lc-titre{ flex: 1 1 auto; }
+
+/* Pastille de comptage : un groupe replié ne doit pas cacher qu'il contient
+   une couche active. */
+.tc-lc-n{
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--c-accent);
+  color: var(--c-surface);
+  font: 700 10px/16px inherit;
+  text-align: center;
+}
+
+/* Largeur constante d'un groupe à l'autre.
+
+   Avec display:none, le contrôle se redimensionnait à chaque ouverture, sur
+   le libellé le plus long du seul groupe ouvert — la carte sautait sous le
+   curseur. Les corps restent donc dans le flux, repliés à height:0 : leur
+   largeur intrinsèque continue de compter dans celle du conteneur, qui vaut
+   désormais celle du groupe le plus large, quel que soit l'ouvert.
+   visibility:hidden les sort du parcours clavier et des clics. */
+.tc-lc-body{
+  height: 0;
+  padding: 0 0 0 14px;
+  overflow: hidden;
+  visibility: hidden;
+}
+.tc-lc-grp.tc-open > .tc-lc-body{
+  height: auto;
+  padding-bottom: 6px;
+  visibility: visible;
+}
+
+.tc-lc-body label{
+  display: block;
+  margin: 0;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Objets flottants posés sur la carte : même facture pour les trois.
+
+   Ils venaient de trois endroits : Leaflet donnait au contrôle des couches un
+   blanc opaque à 5 px de rayon et une ombre à 40 %, aux barres de boutons
+   4 px et une ombre à 65 %, et cette feuille donnait à la légende un blanc à
+   85 % à 6 px. Même surface, même rayon, même trait, même ombre désormais.
+
+   Les formes .leaflet-touch sont reprises parce que Leaflet y annule l'ombre
+   et impose un trait de 2 px, avec une spécificité que la forme simple ne
+   couvre pas.
+
+   overflow:hidden découpe les enfants carrés de Leaflet — les boutons de
+   zoom, la pastille du contrôle des couches — sur le rayon du conteneur,
+   sans avoir à redéfinir le rayon de chaque premier et dernier enfant.
+--------------------------------------------------------------------------- */
+.leaflet-control-layers,
+.leaflet-control.legend,
+.leaflet-bar,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar{
+  background: var(--c-surface);
+  border: 1px solid var(--c-trait);
+  border-radius: var(--r-flottant);
+  box-shadow: 0 2px 10px var(--o-forte);
+  background-clip: padding-box;
+  overflow: hidden;
+}
+
+/* Leaflet écrit aussi des COULEURS DE TEXTE en dur, que la règle de surface
+   ci-dessus ne touchait pas : #333 sur le contrôle des couches déplié — dont
+   héritent les libellés de couches —, du noir sur les boutons de zoom, #ddd
+   sur le séparateur. Illisibles sur une surface sombre. */
+.leaflet-control-layers-expanded{
+  color: var(--c-encre);
+  background: var(--c-surface);
+}
+.leaflet-control-layers-separator{ border-top-color: var(--c-trait); }
+.leaflet-bar a,
+.leaflet-bar a:hover{
+  background-color: var(--c-surface);
+  border-bottom-color: var(--c-trait);
+  color: var(--c-encre);
+}
+.leaflet-bar a:hover{ background-color: var(--c-accent-fond); }
+.leaflet-bar a.leaflet-disabled{
+  background-color: var(--c-fond);
+  color: var(--c-encre-douce);
+}
+/* Plusieurs contrôles de Leaflet sont des IMAGES sombres posées en fond :
+   la pastille du contrôle des couches, les outils de dessin (rectangle,
+   polygone, ligne), le bouton de plein écran. Sur la surface sombre que la
+   règle ci-dessus leur donne, elles deviennent illisibles.
+
+   On ne peut pas filtrer la seule image de fond : invert(1) retourne tout
+   l'élément, fond compris. On rend donc le fond du bouton TRANSPARENT — la
+   surface vient alors de la barre qui le contient, non inversée — et seul le
+   glyphe est retourné. Le survol passe par la luminosité, faute de pouvoir
+   lui donner une couleur sans qu'elle s'inverse aussi. */
+[data-bs-theme="dark"] .leaflet-control-layers-toggle{ filter: invert(1); }
+[data-bs-theme="dark"] .leaflet-draw-toolbar a,
+[data-bs-theme="dark"] .leaflet-control-fullscreen a{
+  background-color: transparent;
+  border-bottom-color: transparent;
+  filter: invert(1);
+}
+[data-bs-theme="dark"] .leaflet-draw-toolbar a:hover,
+[data-bs-theme="dark"] .leaflet-control-fullscreen a:hover{
+  background-color: transparent;
+  filter: invert(1) brightness(1.35);
+}
+[data-bs-theme="dark"] .leaflet-draw-toolbar a.leaflet-disabled{
+  background-color: transparent;
+  opacity: .4;
+}
+
+/* ---------------------------------------------------------------------------
+   Onglet Analyses.
+--------------------------------------------------------------------------- */
+.flex-container.tc-analyse{ --left-rail-w: 340px; }
+
+.tc-analyse-ex{ list-style: none; padding-left: 0; margin: 4px 0 0; }
+.tc-analyse-ex li{ margin-bottom: 4px; }
+.tc-analyse-ex a{ font-size: 12px; }
+
+.tc-analyse-rep{
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 70ch;
+}
+
+.tc-analyse-sql{
+  font-size: 12px;
+  background: var(--c-fond);
+  border: 1px solid var(--c-trait);
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
+
+.tc-analyse-notes{ list-style: disc; padding-left: 18px; margin: 6px 0; }
+.tc-analyse-notes li{ font-size: 11.5px; line-height: 1.4; margin-bottom: 4px; }
+.tc-analyse-notes li.tc-note-off{ color: var(--c-encre-douce); text-decoration: line-through; }
+.tc-analyse-boutons{ display: flex; gap: 4px; }
+
+/* Un échange du fil : la question, puis la réponse. La question est posée sur
+   le fond d'accent pour qu'on la retrouve d'un coup d'œil en parcourant le fil. */
+.tc-analyse-question{
+  background: var(--c-accent-fond);
+  border-left: 3px solid var(--c-accent);
+  border-radius: var(--r-champ);
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.tc-analyse-cout{
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--c-encre-douce);
+}
+.tc-analyse-cout-detail{ color: var(--c-encre-douce); }
+
+/* Réponses de l'onglet Analyses : rendu du Markdown du modèle. */
+.tc-analyse-rep > *:first-child{ margin-top: 0; }
+.tc-analyse-rep > *:last-child{ margin-bottom: 0; }
+.tc-analyse-rep p{ margin: 0 0 10px; }
+.tc-analyse-rep ul,
+.tc-analyse-rep ol{ margin: 0 0 10px; padding-left: 22px; }
+.tc-analyse-rep li{ margin-bottom: 3px; }
+.tc-analyse-rep h1,
+.tc-analyse-rep h2,
+.tc-analyse-rep h3,
+.tc-analyse-rep h4{ font-size: 15px; font-weight: 700; margin: 16px 0 6px; }
+.tc-analyse-rep code{
+  font-size: 12px;
+  background: var(--c-fond);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.tc-analyse-rep pre{
+  font-size: 12px;
+  background: var(--c-fond);
+  border: 1px solid var(--c-trait);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.tc-analyse-rep blockquote{
+  margin: 0 0 10px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--c-trait);
+  color: var(--c-encre-douce);
+}
+
+/* Tableaux : c'est là que le Markdown brut était le moins lisible.
+   tabular-nums aligne les chiffres en colonne sans avoir à deviner
+   quelles cellules sont numériques — l'alignement du Markdown ne
+   survit pas à l'assainissement, qui retire tous les attributs. */
+.tc-analyse-rep table{
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.tc-analyse-rep th,
+.tc-analyse-rep td{
+  padding: 5px 12px 5px 0;
+  border-bottom: 1px solid var(--c-trait);
+  text-align: left;
+  vertical-align: top;
+}
+.tc-analyse-rep th{
+  font-weight: 600;
+  color: var(--c-encre);
+  border-bottom: 2px solid var(--c-trait);
+  white-space: nowrap;
+}
+.tc-analyse-rep tbody tr:hover{ background: var(--c-fond); }

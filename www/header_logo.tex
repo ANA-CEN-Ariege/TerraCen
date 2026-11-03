@@ -1,0 +1,23 @@
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+
+\fancypagestyle{mystyle}{
+    \fancyhf{} % Efface les champs d'en-tête et de pied de page
+    \fancyhead[L]{ % En-tête à gauche
+        \begin{tikzpicture}
+            \node[anchor=west] at (0,0) {\includegraphics[width=4cm]{logo_cen.png}};
+        \end{tikzpicture}
+    }
+    \fancyhead[R]{ % En-tête à droite
+        \begin{tabular}{r}
+            \Huge\textbf{\textcolor{blue}{Rapport d'animation foncière}}\\
+            \large\textcolor{gray}{`r format(Sys.Date(), "%d/%m/%Y")`}
+        \end{tabular}
+    }
+    \renewcommand{\headrulewidth}{0.4pt} % Règle horizontale sous l'en-tête
+    \renewcommand{\footrulewidth}{0.4pt} % Règle horizontale au-dessus du pied de page
+    \fancyfoot[L]{\textcolor{gray}{\small ANA-CEN Ariège}}
+    \fancyfoot[R]{\textcolor{gray}{\small Confidentiel – Diffusion restreinte}}
+}
+\pagestyle{mystyle}

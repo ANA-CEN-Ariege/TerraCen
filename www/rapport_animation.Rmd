@@ -1,0 +1,229 @@
+---
+title: ""
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: false
+    keep_tex: false
+params:
+  titre: ""
+  footer_left: ""
+  footer_right: ""
+  logo: ""
+  footer_img: ""
+  anim_data: !r data.frame()
+  acteurs: !r data.frame()
+  utilisateurs: !r data.frame()
+  parcelles: !r data.frame()
+
+header-includes:
+  - \usepackage[T1]{fontenc}
+  - \usepackage{lmodern}     % Latin Modern (Roman/Sans/Mono) côté TeX
+  - \renewcommand{\familydefault}{\sfdefault}  % met la Sans par défaut (LM Sans)
+  - \usepackage{xcolor}
+  - \usepackage{hyperref}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{listings}
+  - \usepackage{graphicx}
+  - \usepackage{longtable,booktabs,array}
+  - \usepackage{ragged2e}     % \justifying pour une vraie justification
+  - \usepackage{tabularx}
+  - |
+      % Colonne X justifiée pour tabularx
+      \newcolumntype{J}{>{\justifying\arraybackslash}X}
+  - |
+      \setlength{\emergencystretch}{2em}  % aide la coupure de mots dans colonnes étroites
+  - \usepackage{enumitem}
+  - |
+      \setlength{\parskip}{0.6ex}
+      \setlist{nosep}
+      \setlist[itemize]{topsep=0pt, partopsep=0pt, parsep=0pt, itemsep=0pt}
+      \setlist[enumerate]{topsep=0pt, partopsep=0pt, parsep=0pt, itemsep=0pt}
+      \providecommand{\tightlist}{%
+        \setlength{\itemsep}{0pt}%
+        \setlength{\topsep}{0pt}%
+        \setlength{\partopsep}{0pt}%
+      }
+  - \usepackage{fancyhdr}
+  - |
+      \newcommand{\afFooterImg}{}
+      \newcommand{\afFooterScale}{0.85}
+      \fancyhf{}
+      \renewcommand{\headrulewidth}{0pt}
+      \renewcommand{\footrulewidth}{0pt}
+      \setlength{\footskip}{32pt}
+      \pagestyle{fancy}
+      \fancyfoot[C]{\includegraphics[width=\afFooterScale\textwidth]{\afFooterImg}}
+      \fancyfoot[R]{\thepage}
+      \fancypagestyle{plain}{%
+        \fancyhf{}
+        \fancyfoot[C]{\includegraphics[width=\afFooterScale\textwidth]{\afFooterImg}}
+        \fancyfoot[R]{\thepage}
+        \renewcommand{\headrulewidth}{0pt}
+        \renewcommand{\footrulewidth}{0pt}
+      }
+  - |
+      % — réglages globaux tables —
+      \setlength{\tabcolsep}{10pt}   % padding gauche/droite dans chaque cellule (par défaut ~6pt)
+      \renewcommand{\arraystretch}{1.5} % padding haut/bas (1 = défaut)
+      \setlength{\extrarowheight}{4pt}   % petit bonus vertical
+      \setlength{\arrayrulewidth}{0.6pt} % épaisseur des traits (vertical/horizontal)
+
+---
+
+```{r footer_setup, echo=FALSE, results='asis'}
+if (knitr::is_latex_output()) {
+  `%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+  img   <- params$footer_img %||% "bas de page.png"
+  if (!file.exists(img) && file.exists(file.path("www", img))) img <- file.path("www", img)
+  img   <- normalizePath(img, winslash = "/", mustWork = FALSE)
+  scale <- as.numeric(params$footer_scale %||% 0.85)
+
+  cat(sprintf("\\renewcommand{\\afFooterImg}{\\detokenize{%s}}\n", img))
+  cat(sprintf("\\renewcommand{\\afFooterScale}{%0.2f}\n", scale))
+}
+```
+
+```{r header_row, echo=FALSE, results='asis'}
+if (knitr::is_latex_output()) {
+  `%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+  ttl <- params$titre
+  lg  <- params$logo
+  if (!file.exists(lg) && file.exists(file.path("www", lg))) lg <- file.path("www", lg)
+  lg <- normalizePath(lg, winslash = "/", mustWork = FALSE)
+
+  hmm <- as.numeric(params$logo_h_mm %||% 18)
+
+  cat(sprintf("
+\\noindent
+\\begin{tabular}{@{}m{0.22\\textwidth}@{\\hspace{1em}}m{0.74\\textwidth}@{}}
+\\includegraphics[height=%0.1fmm,keepaspectratio]{%s} &
+\\raggedleft{\\Large\\bfseries %s} \\\\
+\\end{tabular}
+\\vspace{0.5em}
+", hmm, lg, ttl))
+}
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+`%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+fmt_date <- function(x) ifelse(is.na(x) | !nzchar(as.character(x)), "—", format(as.Date(x), "%d/%m/%Y"))
+
+ad    <- params$anim_data     %||% data.frame()
+acts  <- params$acteurs       %||% data.frame()
+users <- params$utilisateurs  %||% data.frame()
+parc  <- params$parcelles     %||% data.frame()
+  
+```
+  
+**Date :** `r if (nrow(ad)>0 && "date" %in% names(ad)) fmt_date(ad$date[1]) else "—"`
+  
+## Participants
+
+```{r, echo=FALSE, results='asis'}
+# Récupération des noms depuis les params
+noms <- character(0)
+if (nrow(acts)  && "acteur"      %in% names(acts))  noms <- c(noms, acts$acteur)
+if (nrow(users) && "utilisateur" %in% names(users)) noms <- c(noms, users$utilisateur)
+cat(if (length(noms)) paste(noms, collapse = ", ") else "—")
+```
+
+## 
+```{r, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+desc <- if (nrow(ad) > 0 && "description" %in% names(ad)) ad$description[1] else ""
+desc <- trimws(as.character(desc))
+
+if (!nzchar(desc)) {
+  cat("—")
+} else {
+
+  # --- Utilitaires ---
+  to_latex <- function(html_fragment) {
+  f_in  <- tempfile(fileext = ".html")
+  writeLines(paste0("<!doctype html><html><body>", html_fragment, "</body></html>"),
+             f_in, useBytes = TRUE)
+  f_out <- tempfile(fileext = ".tex")
+  rmarkdown::pandoc_convert(
+    input   = f_in,
+    from    = "html",
+    to      = "latex",
+    output  = f_out,
+    options = c("--wrap=none")
+  )
+  tx <- paste(readLines(f_out, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+
+  # Nettoyages sûrs
+  tx <- gsub("\\\\tightlist", "", tx)
+  tx <- gsub("\\\\ul(\\s*\\{)", "\\\\uline\\1", tx, perl = TRUE)
+
+  tx
+}
+
+  cell_html_to_latex <- function(inner_html) {
+    inner_html <- gsub("<br\\s*/?>", "<br />", inner_html, perl = TRUE)
+    tx <- to_latex(inner_html)
+    paste0(
+      "\\begin{minipage}[c]{\\linewidth}",
+      "\\setlength{\\parindent}{0pt}\\setlength{\\parskip}{0.5ex}\n",
+      "\\vspace{8pt}", # Espacement pour le haut
+      tx,
+      "\n\\vspace{8pt}\\end{minipage}" # Espacement pour le bas
+    )
+  }
+
+  make_tabularx_from_html_table <- function(tbl_html) {
+  rows <- stringr::str_match_all(tbl_html, "(?is)<tr[^>]*>(.*?)</tr>")[[1]][,2]
+  cells_by_row <- lapply(
+    rows,
+    function(r) stringr::str_match_all(r, "(?is)<t[dh][^>]*>(.*?)</t[dh]>")[[1]][,2]
+  )
+  ncol <- max(lengths(cells_by_row))
+
+  # ⬇️ Colonnes J (justifiées) + barres verticales gauche/droite
+  colspec <- paste(rep("J", ncol), collapse = " | ")
+  colspec <- paste0("| ", colspec, " |")
+
+  cat("\\par\\vspace{0.8em}\n")  # ⬅️ espace AVANT le tableau
+  cat("\\begingroup\n")
+  cat("\\begin{tabularx}{\\textwidth}{", colspec, "}\n\\hline\n", sep = "")
+  for (cells in cells_by_row) {
+    cell_tex <- vapply(cells, cell_html_to_latex, "", USE.NAMES = FALSE)
+    cat(paste(cell_tex, collapse = " & "), " \\\\\n\\hline\n", sep = "")
+  }
+  cat("\\end{tabularx}\n\\endgroup\n")
+}
+
+
+  # Découpe : texte hors tableaux vs. tableaux
+  parts <- stringr::str_split(desc, "(?is)(<table.*?</table>)")[[1]]
+  tabs  <- stringr::str_match_all(desc, "(?is)(<table.*?</table>)")[[1]][,2]
+  
+  for (i in seq_along(parts)) {
+    txt <- parts[[i]]
+    if (nzchar(txt)) {
+      cat("\\begingroup\\setlength{\\parindent}{0pt}\\setlength{\\parskip}{0.6ex}\n")
+      cat(to_latex(txt), "\n")
+      cat("\\par\\endgroup\n")
+    }
+    if (i <= length(tabs)) make_tabularx_from_html_table(tabs[[i]])
+  }
+
+}
+
+```
+
+<!-- ## Parcelles -->
+<!-- ```{r} -->
+<!--   if (nrow(parc)) { -->
+<!--     if ("surface_m2" %in% names(parc)) { -->
+<!--       parc$`Surface (ha)` <- round(as.numeric(parc$surface_m2)/10000, 4) -->
+<!--     } -->
+<!--     keep <- c("code","commune","proprietaires","Surface (ha)","contrats") -->
+<!--     keep <- intersect(keep, names(parc)) -->
+<!--     knitr::kable(parc[, keep, drop = FALSE], align = "l") -->
+<!--   } else { -->
+<!--     cat("—") -->
+<!--   } -->
+<!-- ``` -->

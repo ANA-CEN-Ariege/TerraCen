@@ -1,0 +1,34 @@
+.DS_Store/
+Docs/
+.Rproj.user
+.Rhistory
+.Rdata
+.RData
+.httr-oauth
+.Renviron
+.DS_Store
+.quarto
+1.0.Rproj
+save/
+missing_docs_report.csv
+db_schema_gestcons.sql
+restart.txt
+AUDIT.md
+droits_profils.xlsx
+
+# Journaux LaTeX régénérés par la génération des rapports PDF
+www/*.log
+
+# pipeline/ : retiré du dépôt le 2026-08-18. Ce pipeline alimentait TerraCEN-view,
+# remplacé par MapCen, qui versionne ses propres scripts (mapcen/pipeline/).
+# Le dossier subsiste sur le serveur interne — les scripts y sont déposés parce
+# que c'est là que vit le .Renviron d'accès à la base — mais il n'appartient plus
+# à TerraCEN. L'ignorer évite qu'il ne réapparaisse dans git status côté serveur.
+pipeline/
+
+# Scripts ponctuels (correction, vérification ou reprise de données) et
+# rapports d'audit : ils restent sur le poste, jamais dans le dépôt.
+scripts/local/
+
+# Fichiers verrou de Microsoft Office
+~$*

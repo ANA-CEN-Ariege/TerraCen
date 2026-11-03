@@ -1,0 +1,299 @@
+---
+title: ""
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: false
+    keep_tex: false
+params:
+  titre: ""
+  footer_left: ""
+  footer_right: ""
+  logo: ""
+  footer_img: ""
+  anim_data: !r data.frame()
+  acteurs: !r data.frame()
+  utilisateurs: !r data.frame()
+  parcelles: !r data.frame()
+
+header-includes:
+  - \usepackage[T1]{fontenc}
+  - \usepackage{lmodern}     % Latin Modern (Roman/Sans/Mono) côté TeX
+  - \renewcommand{\familydefault}{\sfdefault}  % met la Sans par défaut (LM Sans)
+  - \usepackage{xcolor}
+  - \usepackage{hyperref}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{listings}
+  - \usepackage{graphicx}
+  - \usepackage{longtable,booktabs,array}
+  - \usepackage{ragged2e}     % \justifying pour une vraie justification
+  - \usepackage{tabularx}
+  - |
+      % Colonne X justifiée pour tabularx
+      \newcolumntype{J}{>{\justifying\arraybackslash}X}
+  - |
+      \setlength{\emergencystretch}{2em}  % aide la coupure de mots dans colonnes étroites
+  - |
+      % Listes compactes sans paquet supplémentaire : on ne touche PAS aux
+      % internes de LaTeX (\@listi & co), une tentative en ce sens a cassé
+      % l'ouverture même des environnements de liste.
+      \setlength{\parskip}{0.6ex}
+      \setlength{\parindent}{0pt}
+      \providecommand{\tightlist}{%
+        \setlength{\itemsep}{0pt}%
+        \setlength{\topsep}{0pt}%
+        \setlength{\partopsep}{0pt}%
+      }
+  - \usepackage{fancyhdr}
+  - |
+      \newcommand{\afFooterImg}{}
+      \newcommand{\afFooterScale}{0.85}
+      \fancyhf{}
+      \renewcommand{\headrulewidth}{0pt}
+      \renewcommand{\footrulewidth}{0pt}
+      \setlength{\footskip}{32pt}
+      \pagestyle{fancy}
+      \fancyfoot[C]{\includegraphics[width=\afFooterScale\textwidth]{\afFooterImg}}
+      \fancyfoot[R]{\thepage}
+      \fancypagestyle{plain}{%
+        \fancyhf{}
+        \fancyfoot[C]{\includegraphics[width=\afFooterScale\textwidth]{\afFooterImg}}
+        \fancyfoot[R]{\thepage}
+        \renewcommand{\headrulewidth}{0pt}
+        \renewcommand{\footrulewidth}{0pt}
+      }
+  - |
+      % — réglages globaux tables —
+      \setlength{\tabcolsep}{10pt}   % padding gauche/droite dans chaque cellule (par défaut ~6pt)
+      \renewcommand{\arraystretch}{1.5} % padding haut/bas (1 = défaut)
+      \setlength{\extrarowheight}{4pt}   % petit bonus vertical
+      \setlength{\arrayrulewidth}{0.6pt} % épaisseur des traits (vertical/horizontal)
+
+---
+
+```{r footer_setup, echo=FALSE, results='asis'}
+if (knitr::is_latex_output()) {
+  `%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+  img   <- params$footer_img %||% "bas de page.png"
+  if (!file.exists(img) && file.exists(file.path("www", img))) img <- file.path("www", img)
+  img   <- normalizePath(img, winslash = "/", mustWork = FALSE)
+  scale <- as.numeric(params$footer_scale %||% 0.85)
+
+  cat(sprintf("\\renewcommand{\\afFooterImg}{\\detokenize{%s}}\n", img))
+  cat(sprintf("\\renewcommand{\\afFooterScale}{%0.2f}\n", scale))
+}
+```
+
+```{r header_row, echo=FALSE, results='asis'}
+if (knitr::is_latex_output()) {
+  `%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+  ttl <- params$titre
+  lg  <- params$logo
+  if (!file.exists(lg) && file.exists(file.path("www", lg))) lg <- file.path("www", lg)
+  lg <- normalizePath(lg, winslash = "/", mustWork = FALSE)
+
+  hmm <- as.numeric(params$logo_h_mm %||% 18)
+
+  cat(sprintf("
+\\noindent
+\\begin{tabular}{@{}m{0.22\\textwidth}@{\\hspace{1em}}m{0.74\\textwidth}@{}}
+\\includegraphics[height=%0.1fmm,keepaspectratio]{%s} &
+\\raggedleft{\\Large\\bfseries %s} \\\\
+\\end{tabular}
+\\vspace{0.5em}
+", hmm, lg, ttl))
+}
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+`%||%` <- function(a,b) if (is.null(a) || length(a)==0) b else a
+fmt_date <- function(x) ifelse(is.na(x) | !nzchar(as.character(x)), "—", format(as.Date(x), "%d/%m/%Y"))
+
+ad    <- params$anim_data     %||% data.frame()
+acts  <- params$acteurs       %||% data.frame()
+users <- params$utilisateurs  %||% data.frame()
+parc  <- params$parcelles     %||% data.frame()
+  
+```
+  
+**Date :** `r if (nrow(ad)>0 && "date" %in% names(ad)) fmt_date(ad$date[1]) else "—"`
+  
+## Participants
+
+```{r, echo=FALSE, results='asis'}
+# Récupération des noms depuis les params
+noms <- character(0)
+if (nrow(acts)  && "acteur"      %in% names(acts))  noms <- c(noms, acts$acteur)
+if (nrow(users) && "utilisateur" %in% names(users)) noms <- c(noms, users$utilisateur)
+cat(if (length(noms)) paste(noms, collapse = ", ") else "—")
+```
+
+## 
+```{r, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+desc <- if (nrow(ad) > 0 && "description" %in% names(ad)) ad$description[1] else ""
+desc <- trimws(as.character(desc))
+
+if (!nzchar(desc)) {
+  cat("—")
+} else {
+
+  # --- Utilitaires ---
+  to_latex <- function(html_fragment) {
+  # Les descriptions collées depuis Word/Outlook portent des attributs
+  # lang="FR" ; Pandoc les traduit en \foreignlanguage{french}{…}, or babel
+  # est chargé sans le français et répond « Not loaded » — toute la
+  # compilation échoue. On retire ces attributs, sans intérêt ici.
+  html_fragment <- gsub("(?i)\\s(xml:)?lang\\s*=\\s*([\"'])[^\"']*\\2", "",
+                        html_fragment, perl = TRUE)
+  f_in  <- tempfile(fileext = ".html")
+  writeLines(paste0("<!doctype html><html><body>", html_fragment, "</body></html>"),
+             f_in, useBytes = TRUE)
+  f_out <- tempfile(fileext = ".tex")
+  rmarkdown::pandoc_convert(
+    input   = f_in,
+    from    = "html-native_spans-native_divs",
+    to      = "latex",
+    output  = f_out,
+    options = c("--wrap=none")
+  )
+  tx <- paste(readLines(f_out, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+
+  # Nettoyages sûrs
+  tx <- gsub("\\\\tightlist", "", tx)
+  # Filet de sécurité : si une commande de langue passe malgré tout, on la
+  # retire AVEC les accolades de son argument. Se contenter d'effacer
+  # « \foreignlanguage{french} » laisserait « {TEXTE} » : ce fragment étant
+  # réinjecté dans du Markdown, Pandoc échappe alors ces accolades et elles
+  # s'impriment dans le PDF.
+  .desencapsuler <- function(x, cmd) {
+    repeat {
+      m <- regexpr(sprintf("\\\\%s\\{[^{}]*\\}\\{", cmd), x, perl = TRUE)
+      if (m[1] == -1L) break
+      deb <- m[1]
+      ouv <- deb + attr(m, "match.length") - 1L   # position de l'accolade ouvrante
+      ch <- strsplit(x, "", fixed = TRUE)[[1]]
+      prof <- 0L; fin <- -1L
+      for (i in seq(ouv, length(ch))) {
+        if (ch[i] == "{") prof <- prof + 1L
+        else if (ch[i] == "}") { prof <- prof - 1L; if (prof == 0L) { fin <- i; break } }
+      }
+      if (fin == -1L) break
+      x <- paste0(substr(x, 1L, deb - 1L),
+                  substr(x, ouv + 1L, fin - 1L),
+                  substr(x, fin + 1L, nchar(x)))
+    }
+    x
+  }
+  tx <- .desencapsuler(tx, "foreignlanguage")
+  tx <- gsub("\\\\selectlanguage\\{[^{}]*\\}", "", tx, perl = TRUE)
+  tx <- gsub("\\\\ul(\\s*\\{)", "\\\\uline\\1", tx, perl = TRUE)
+
+  # Équilibrage des environnements de liste.
+  # La description est découpée sur les <table> et chaque morceau est converti
+  # séparément : une liste à cheval sur ce découpage produit un fragment dont
+  # l'ouverture ou la fermeture manque. Le fragment est ensuite entouré de
+  # \begingroup…\endgroup, si bien que le groupe se referme À L'INTÉRIEUR de
+  # la liste — LaTeX échoue alors sur
+  # « \begin{document} ended by \end{itemize} » et aucun PDF n'est produit.
+  # On rend donc chaque fragment autonome avant de le rendre.
+  .nb <- function(x, pat) {
+    m <- gregexpr(pat, x, perl = TRUE)[[1]]
+    if (length(m) == 1L && m[1] == -1L) 0L else length(m)
+  }
+  for (env in c("itemize", "enumerate", "description", "quote")) {
+    ouv <- .nb(tx, sprintf("\\\\begin\\{%s\\}", env))
+    fer <- .nb(tx, sprintf("\\\\end\\{%s\\}", env))
+    if (ouv > fer) {
+      # fermetures manquantes : on les ajoute à la fin
+      tx <- paste0(tx, strrep(sprintf("\n\\end{%s}", env), ouv - fer))
+    } else if (fer > ouv) {
+      # fermetures orphelines : on retire les premières en trop
+      for (k in seq_len(fer - ouv)) {
+        tx <- sub(sprintf("\\\\end\\{%s\\}", env), "", tx, perl = TRUE)
+      }
+    }
+  }
+
+  tx
+}
+
+  cell_html_to_latex <- function(inner_html) {
+    inner_html <- gsub("<br\\s*/?>", "<br />", inner_html, perl = TRUE)
+    tx <- to_latex(inner_html)
+    paste0(
+      "\\begin{minipage}[c]{\\linewidth}",
+      "\\setlength{\\parindent}{0pt}\\setlength{\\parskip}{0.5ex}\n",
+      "\\vspace{8pt}", # Espacement pour le haut
+      tx,
+      "\n\\vspace{8pt}\\end{minipage}" # Espacement pour le bas
+    )
+  }
+
+  make_tabularx_from_html_table <- function(tbl_html) {
+  rows <- stringr::str_match_all(tbl_html, "(?is)<tr[^>]*>(.*?)</tr>")[[1]][,2]
+  cells_by_row <- lapply(
+    rows,
+    function(r) stringr::str_match_all(r, "(?is)<t[dh][^>]*>(.*?)</t[dh]>")[[1]][,2]
+  )
+  ncol <- max(lengths(cells_by_row))
+
+  # ⬇️ Colonnes J (justifiées) + barres verticales gauche/droite
+  colspec <- paste(rep("J", ncol), collapse = " | ")
+  colspec <- paste0("| ", colspec, " |")
+
+  # Un seul bloc LaTeX brut, isolé par des lignes vides : émis morceau par
+  # morceau sans séparation, Pandoc le fusionne avec le texte alentour et
+  # déplace les fermetures (même défaut que le \begingroup de la description).
+  tbl <- paste0(
+    "\\par\\vspace{0.8em}\n",
+    "\\begingroup\n",
+    "\\begin{tabularx}{\\textwidth}{", colspec, "}\n\\hline\n",
+    paste(vapply(cells_by_row, function(cells) {
+      cell_tex <- vapply(cells, cell_html_to_latex, "", USE.NAMES = FALSE)
+      paste0(paste(cell_tex, collapse = " & "), " \\\\\n\\hline\n")
+    }, ""), collapse = ""),
+    "\\end{tabularx}\n\\endgroup\n"
+  )
+  cat("\n", tbl, "\n", sep = "")
+}
+
+
+  # Découpe : texte hors tableaux vs. tableaux
+  parts <- stringr::str_split(desc, "(?is)(<table.*?</table>)")[[1]]
+  tabs  <- stringr::str_match_all(desc, "(?is)(<table.*?</table>)")[[1]][,2]
+  
+  for (i in seq_along(parts)) {
+    txt <- parts[[i]]
+    if (nzchar(txt)) {
+      # Pas de \begingroup…\par\endgroup ici : ce bloc écrit du LaTeX dans du
+      # Markdown, que Pandoc reconvertit. Sans lignes vides pour délimiter les
+      # blocs bruts, il fusionnait le tout et déplaçait le \par\endgroup À
+      # L'INTÉRIEUR du dernier \item d'une liste — le groupe se refermait donc
+      # dans l'environnement et LaTeX échouait sur
+      # « \begin{document} ended by \end{itemize} ».
+      # Les deux longueurs que ce groupe fixait (parindent, parskip) sont
+      # désormais réglées globalement dans l'en-tête : le groupe est inutile.
+      cat("\n", to_latex(txt), "\n\n", sep = "")
+    }
+    if (i <= length(tabs)) make_tabularx_from_html_table(tabs[[i]])
+  }
+
+}
+
+```
+
+<!-- ## Parcelles -->
+<!-- ```{r} -->
+<!--   if (nrow(parc)) { -->
+<!--     if ("surface_m2" %in% names(parc)) { -->
+<!--       parc$`Surface (ha)` <- round(as.numeric(parc$surface_m2)/10000, 4) -->
+<!--     } -->
+<!--     keep <- c("code","commune","proprietaires","Surface (ha)","contrats") -->
+<!--     keep <- intersect(keep, names(parc)) -->
+<!--     knitr::kable(parc[, keep, drop = FALSE], align = "l") -->
+<!--   } else { -->
+<!--     cat("—") -->
+<!--   } -->
+<!-- ``` -->

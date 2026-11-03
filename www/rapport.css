@@ -1,0 +1,8 @@
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ddd; padding: 6px 8px; }
+thead th { background: #f6f8fb; }
+table caption { caption-side: top; font-weight: 600; margin-bottom: .5rem; }
+
+/* Titres (si tu veux une hiérarchie visuelle plus marquée) */
+h1,h2,h3 { margin-top: 1.2rem; }
+
