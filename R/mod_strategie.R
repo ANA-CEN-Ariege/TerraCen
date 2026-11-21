@@ -2310,9 +2310,14 @@ strategie_server <- function(id, con, dico_type_milieu, dico_geol,
       if (is.null(sid) || is.na(sid) || !isTRUE(can_edit())) return(invisible(NULL))
       ok <- tryCatch({
         pool::poolWithTransaction(con, function(conn) {
-          safe_db_execute(conn, glue::glue("
-            DELETE FROM gestcons.responsable_sites WHERE site_id = {sid}
-          "))
+          # Les personnes rattachées au secteur partent avec lui. Leurs clés
+          # étrangères sont en NO ACTION : en oublier une, et la base refuse
+          # la suppression (animateurs et bénévoles l'étaient, cf. issue #8).
+          for (tbl in c("responsable_sites", "animateur_sites", "conservateur_benevole")) {
+            safe_db_execute(conn, glue::glue("
+              DELETE FROM gestcons.{tbl} WHERE site_id = {sid}
+            "))
+          }
           n <- safe_db_execute(conn, glue::glue("
             DELETE FROM gestcons.sites
              WHERE id = {sid} AND type_site_id = {TYPE_SITE_SECTEUR}
