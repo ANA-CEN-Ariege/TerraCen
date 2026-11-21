@@ -1620,230 +1620,21 @@ sites_server <- function(
     #' -------------------------
     #' Supprimer un site (administrateur)
     #' -------------------------
-    # Même ordre que scripts/delete_site.sql, imposé par les clés étrangères,
-    # presque toutes en NO ACTION : liens des parcelles, actions, contrat de
-    # préfiguration, parcelles, puis les tables qui pointent vers le site.
-    #
-    # Partent avec le site : ses parcelles et tous leurs liens ; les actions
-    # dont toutes les parcelles sont sur ce site, avec leurs documents ; son
-    # contrat de préfiguration s'il est resté tel que la création l'a fait
-    # (même nom, même remarque, ni acteur, ni document, ni parcelle ailleurs) ;
-    # statuts, rôles et liens aux documents de gestion.
-    # Restent, sur décision de l'utilisateur : tous les autres contrats, même
-    # sans plus aucune parcelle — la confirmation les nomme —, et les documents
-    # de gestion, dont seul le lien au site est retiré.
+    # Inventaire, suppression et fenêtre de confirmation sont dans helpers.R,
+    # partagés avec la suppression d'un secteur (mod_strategie.R).
     site_a_supprimer <- reactiveVal(NULL)
-
-    .liste_ids <- function(ids) paste(as.integer(ids), collapse = ", ")
-
-    # `db` : le pool pour la confirmation, la connexion de la transaction pour
-    # la suppression, qui refait l'inventaire avant d'agir.
-    .inventaire_suppression_site <- function(db, sid) {
-      q <- function(sql) DBI::dbGetQuery(db, log_query(sql))
-      site <- q(glue::glue("
-        SELECT s.libelle,
-          (SELECT count(*) FROM gestcons.parcelles_base p
-            WHERE p.site_id = s.id AND NOT p.perimetre)::int AS parcelles,
-          (SELECT count(*) FROM gestcons.parcelles_base p
-            WHERE p.site_id = s.id AND p.perimetre)::int AS continuite,
-          ((SELECT count(*) FROM gestcons.responsable_sites x WHERE x.site_id = s.id)
-           + (SELECT count(*) FROM gestcons.animateur_sites x WHERE x.site_id = s.id)
-           + (SELECT count(*) FROM gestcons.conservateur_benevole x WHERE x.site_id = s.id))::int AS roles,
-          (SELECT count(*) FROM gestcons.docs_gestion_sites x WHERE x.site_id = s.id)::int AS documents
-          FROM gestcons.sites s
-         WHERE s.id = {sid} AND s.type_site_id = {TYPE_SITE_CONSERVATOIRE}
-      "))
-      if (nrow(site) == 0) return(NULL)
-
-      # Objets liés aux parcelles du site et à AUCUNE autre : ceux qui n'auront
-      # plus de parcelle une fois le site supprimé.
-      seulement_ce_site <- function(table, liens, fk, cols = "t.id") glue::glue("
-        SELECT {cols} FROM {table} t
-         WHERE EXISTS (SELECT 1 FROM {liens} x JOIN gestcons.parcelles_base pb ON pb.id = x.parcelle_id
-                        WHERE x.{fk} = t.id AND pb.site_id = {sid})
-           AND NOT EXISTS (SELECT 1 FROM {liens} x JOIN gestcons.parcelles_base pb ON pb.id = x.parcelle_id
-                            WHERE x.{fk} = t.id AND pb.site_id IS DISTINCT FROM {sid})
-      ")
-
-      # Le nom suit .create_default_contrat : « Préfiguration » + libellé
-      # tronqué à 240 caractères. Un site renommé depuis ne le retrouve pas, et
-      # son contrat est alors traité comme les autres. Deux candidats : aucun.
-      prefig <- q(glue::glue("
-        SELECT cf.id, cf.nom
-          FROM gestcons.contrats_fonciers cf
-          JOIN gestcons.sites s ON s.id = {sid}
-         WHERE cf.nom = 'Préfiguration ' || left(s.libelle, 240)
-           AND cf.remarque = {DBI::dbQuoteString(db, REMARQUE_CONTRAT_PREFIGURATION)}
-           AND NOT EXISTS (SELECT 1 FROM gestcons.contrats_foncier_parcelles x
-                             JOIN gestcons.parcelles_base pb ON pb.id = x.parcelle_id
-                            WHERE x.contrat_id = cf.id AND pb.site_id IS DISTINCT FROM {sid})
-           AND NOT EXISTS (SELECT 1 FROM gestcons.contrats_acteurs_fonciers a
-                            WHERE a.contrat_foncier_id = cf.id)
-           AND NOT EXISTS (SELECT 1 FROM gestcons.docs_contrat_foncier d WHERE d.contrat_id = cf.id)
-      "))
-      if (nrow(prefig) != 1) prefig <- prefig[0, , drop = FALSE]
-
-      contrats <- q(paste(
-        seulement_ce_site("gestcons.contrats_fonciers", "gestcons.contrats_foncier_parcelles",
-                          "contrat_id", "'foncier' AS nature, t.id, t.nom"),
-        "UNION ALL",
-        seulement_ce_site("gestcons.contrats_agricoles", "gestcons.contrats_agricoles_parcelles",
-                          "contrat_agri_id", "'agricole' AS nature, t.id, t.nom"),
-        "ORDER BY 3"))
-      contrats <- contrats[!(contrats$nature == "foncier" & contrats$id %in% prefig$id), , drop = FALSE]
-
-      list(
-        libelle   = site$libelle[1],
-        comptes   = site[1, ],
-        actions_f = q(seulement_ce_site("gestcons.animation_fonciere",
-                                        "gestcons.animation_fonciere_parcelles", "animation_id"))$id,
-        actions_a = q(seulement_ce_site("gestcons.animation_contrat_agricole",
-                                        "gestcons.animation_contrat_agricole_parcelles", "animation_id"))$id,
-        prefig    = prefig,
-        contrats  = contrats,
-        docs      = q(glue::glue("
-          SELECT d.id, COALESCE(d.nom, '(sans nom)') AS nom FROM gestcons.doc_gestion d
-           WHERE EXISTS (SELECT 1 FROM gestcons.docs_gestion_sites x
-                          WHERE x.doc_gestion_id = d.id AND x.site_id = {sid})
-             AND NOT EXISTS (SELECT 1 FROM gestcons.docs_gestion_sites x
-                              WHERE x.doc_gestion_id = d.id AND x.site_id <> {sid})
-           ORDER BY 2
-        "))
-      )
-    }
-
-    # Toutes les lignes dans la transaction de l'appelant ; les fichiers des
-    # actions supprimées sont seulement RENVOYÉS, pour être effacés une fois la
-    # transaction validée (même règle que la suppression d'une action,
-    # mod_actions.R).
-    .supprimer_site <- function(conn, sid) {
-      inv <- .inventaire_suppression_site(conn, sid)
-      if (is.null(inv)) stop("ce site n'existe plus.")
-      parcelles <- glue::glue("(SELECT id FROM gestcons.parcelles_base WHERE site_id = {sid})")
-
-      # 1. Les liens des parcelles du site
-      for (t in c("contrats_foncier_parcelles", "contrats_agricoles_parcelles",
-                  "animation_fonciere_parcelles", "animation_contrat_agricole_parcelles",
-                  "parcelles_protection", "parcelles_sources_geom")) {
-        tx_execute(conn, glue::glue("DELETE FROM gestcons.{t} WHERE parcelle_id IN {parcelles}"))
-      }
-
-      # 2. Les actions restées sans aucune parcelle, avec leurs documents
-      fichiers <- character(0)
-      n_actions <- 0L
-      for (a in list(
-        list(table = "gestcons.animation_fonciere", ids = inv$actions_f,
-             docs  = "gestcons.docs_animation_fonciere",
-             liens = c("gestcons.animation_fonciere_parcelles",
-                       "gestcons.animation_fonciere_utilisateur",
-                       "gestcons.animation_fonciere_acteurs")),
-        list(table = "gestcons.animation_contrat_agricole", ids = inv$actions_a,
-             docs  = "gestcons.docs_animation_agricole",
-             liens = c("gestcons.animation_contrat_agricole_parcelles",
-                       "gestcons.animation_contrat_agricole_acteurs")))) {
-        if (!length(a$ids)) next
-        ids <- DBI::dbGetQuery(conn, log_query(glue::glue("
-          SELECT t.id FROM {a$table} t
-           WHERE t.id IN ({.liste_ids(a$ids)})
-             AND NOT EXISTS (SELECT 1 FROM {a$liens[1]} x WHERE x.animation_id = t.id)
-        ")))$id
-        if (!length(ids)) next
-        ids <- .liste_ids(ids)
-        docs <- DBI::dbGetQuery(conn, glue::glue(
-          "SELECT url, nom_fichier FROM {a$docs} WHERE animation_id IN ({ids})"))
-        if (nrow(docs) > 0) {
-          fichiers <- c(fichiers, unname(mapply(function(u, f) docs_chemin(docs_root, u, f),
-                                                docs$url, docs$nom_fichier)))
-        }
-        tx_execute(conn, glue::glue("DELETE FROM {a$docs} WHERE animation_id IN ({ids})"))
-        for (t in a$liens) tx_execute(conn, glue::glue("DELETE FROM {t} WHERE animation_id IN ({ids})"))
-        n_actions <- n_actions + tx_execute(conn, glue::glue("DELETE FROM {a$table} WHERE id IN ({ids})"))
-      }
-
-      # 3. Le contrat de préfiguration, conditions revérifiées au moment d'agir
-      n_prefig <- 0L
-      if (nrow(inv$prefig) == 1) {
-        n_prefig <- tx_execute(conn, glue::glue("
-          DELETE FROM gestcons.contrats_fonciers cf
-           WHERE cf.id = {inv$prefig$id[1]}
-             AND NOT EXISTS (SELECT 1 FROM gestcons.contrats_foncier_parcelles x WHERE x.contrat_id = cf.id)
-             AND NOT EXISTS (SELECT 1 FROM gestcons.contrats_acteurs_fonciers a WHERE a.contrat_foncier_id = cf.id)
-             AND NOT EXISTS (SELECT 1 FROM gestcons.docs_contrat_foncier d WHERE d.contrat_id = cf.id)
-        "))
-      }
-
-      # 4. Les parcelles. trg_del_perimetre_manuel purge le polygone des manuelles.
-      tx_execute(conn, glue::glue("DELETE FROM gestcons.parcelles_base WHERE site_id = {sid}"))
-
-      # 5. Vestige de la fusion de 2026, tant que la table existe
-      if (isTRUE(DBI::dbGetQuery(conn, "
-            SELECT to_regclass('gestcons.parcelles_perimetre_old') IS NOT NULL AS ok")$ok)) {
-        tx_execute(conn, glue::glue("DELETE FROM gestcons.parcelles_perimetre_old WHERE site_id = {sid}"))
-      }
-
-      # 6. Les tables qui pointent vers le site, puis le site
-      for (t in c("docs_gestion_sites", "sites_statuts", "responsable_sites",
-                  "conservateur_benevole", "animateur_sites", "carto_habitat",
-                  "ouverture_public_sites")) {
-        tx_execute(conn, glue::glue("DELETE FROM gestcons.{t} WHERE site_id = {sid}"))
-      }
-      n <- tx_execute(conn, glue::glue("
-        DELETE FROM gestcons.sites WHERE id = {sid} AND type_site_id = {TYPE_SITE_CONSERVATOIRE}"))
-      if (!identical(as.integer(n), 1L)) stop("le site n'a pas pu être supprimé.")
-
-      list(fichiers = fichiers[!is.na(fichiers)], n_actions = n_actions,
-           n_prefig = as.integer(n_prefig), contrats = inv$contrats)
-    }
 
     observeEvent(input$supprimer_site, {
       sid <- suppressWarnings(as.integer(site_id_edition()))
       if (!isTRUE(user_roles()$global_role == "AD") || length(sid) != 1 || is.na(sid)) {
         return(invisible(NULL))
       }
-      inv <- tryCatch(.inventaire_suppression_site(con, sid), error = function(e) {
+      inv <- tryCatch(inventaire_suppression_site(con, sid, TYPE_SITE_CONSERVATOIRE), error = function(e) {
         showToast("error", "Suppression impossible", conditionMessage(e)); NULL
       })
       if (is.null(inv)) return(invisible(NULL))
       site_a_supprimer(list(id = sid, libelle = inv$libelle))
-
-      k <- inv$comptes
-      n_actions <- length(inv$actions_f) + length(inv$actions_a)
-      showModal(modalDialog(
-        title = "Supprimer le site",
-        easyClose = FALSE,
-        footer = tagList(
-          modalButton("Annuler"),
-          # Activé par l'observateur ci-dessous, une fois le nom tapé.
-          shinyjs::disabled(actionButton(ns("supprimer_site_confirm"),
-                                         "🗑 Supprimer définitivement", class = "btn btn-danger"))
-        ),
-        tags$p("Le site ", tags$strong(inv$libelle), " sera supprimé avec :"),
-        tags$ul(
-          tags$li(sprintf("%d parcelle(s) du site et %d parcelle(s) de continuité, et leurs liens aux contrats et aux actions ;",
-                          k$parcelles, k$continuite)),
-          tags$li(sprintf("%d action(s) qui n'ont de parcelles que sur ce site, avec leurs documents ;",
-                          n_actions)),
-          if (nrow(inv$prefig) == 1) tags$li("son contrat de préfiguration, « ", inv$prefig$nom[1], " » ;"),
-          tags$li(sprintf("%d rôle(s) de responsable, d'animateur ou de bénévole, historique compris ;",
-                          k$roles)),
-          tags$li(sprintf("ses statuts et %d lien(s) à des documents de gestion.", k$documents))
-        ),
-        if (nrow(inv$contrats) > 0) tagList(
-          tags$p(tags$strong(sprintf("%d contrat(s) n'auront plus aucune parcelle.", nrow(inv$contrats))),
-                 " Ils sont conservés, à traiter dans l'onglet Contrats :"),
-          tags$ul(lapply(seq_len(nrow(inv$contrats)), function(i)
-            tags$li(sprintf("%s (contrat %s n° %d)", inv$contrats$nom[i],
-                            inv$contrats$nature[i], inv$contrats$id[i]))))
-        ),
-        if (nrow(inv$docs) > 0) tagList(
-          tags$p(sprintf("%d document(s) de gestion ne seront plus rattachés à aucun site. Ils sont conservés, avec leurs fichiers :",
-                         nrow(inv$docs))),
-          tags$ul(lapply(inv$docs$nom, tags$li))
-        ),
-        tags$p(tags$strong("Cette opération est irréversible.")),
-        textInput(ns("supprimer_site_nom"), "Pour confirmer, tapez le nom du site :",
-                  value = "", width = "100%")
-      ))
+      showModal(modale_suppression_site(ns, inv, "supprimer_site_confirm", "supprimer_site_nom"))
     })
 
     observe({
@@ -1867,7 +1658,9 @@ sites_server <- function(
       on.exit(shinybusy::remove_modal_spinner(), add = TRUE)
 
       bilan <- tryCatch(
-        pool::poolWithTransaction(con, function(conn) .supprimer_site(conn, cible$id)),
+        pool::poolWithTransaction(con, function(conn) {
+          supprimer_site_complet(conn, cible$id, TYPE_SITE_CONSERVATOIRE, docs_root)
+        }),
         error = function(e) {
           showToast("error", "Suppression impossible",
                     paste("Rien n'a été supprimé :", conditionMessage(e)))

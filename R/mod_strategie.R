@@ -160,7 +160,8 @@ strategie_server <- function(id, con, dico_type_milieu, dico_geol,
                              acteurs_existants = NULL,
                              zones_protection_data = NULL,
                              dico_accessibilite,
-                             liste_communes) {
+                             liste_communes,
+                             docs_root) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     user_to_db <- make_user_to_db(current_user_rv)
@@ -2277,65 +2278,96 @@ strategie_server <- function(id, con, dico_type_milieu, dico_geol,
     #' -------------------------
     #' Suppression
     #' -------------------------
+    # Inventaire, suppression et fenêtre de confirmation sont dans helpers.R,
+    # partagés avec la suppression d'un site (mod_sites.R) : le secteur part
+    # avec ses parcelles, leurs liens et les actions qui n'avaient de parcelles
+    # que chez lui. Un administrateur peut supprimer tout secteur ; son
+    # responsable, seulement un secteur sans parcelle, comme avant.
+    secteur_a_supprimer <- reactiveVal(NULL)
+    .est_ad <- function() identical(user_roles()$global_role, "AD")
+
     observeEvent(input$supprimer, {
       sid <- secteur_id()
       if (is.null(sid) || is.na(sid) || !isTRUE(can_edit())) return(invisible(NULL))
-      n_parc <- safe_db_query(con, glue::glue("
-        SELECT count(*)::int AS n FROM gestcons.parcelles_base WHERE site_id = {sid}
-      "))$n[1]
-      showModal(modalDialog(
-        title = "Supprimer le secteur",
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Annuler"),
-          if (n_parc == 0) {
-            actionButton(ns("supprimer_confirm"), "🗑 Confirmer", class = "btn btn-danger")
-          }
-        ),
-        if (n_parc > 0) {
+      inv <- tryCatch(inventaire_suppression_site(con, sid, TYPE_SITE_SECTEUR), error = function(e) {
+        showToast("error", "Suppression impossible", conditionMessage(e)); NULL
+      })
+      if (is.null(inv)) return(invisible(NULL))
+      n_parc <- inv$comptes$parcelles + inv$comptes$continuite
+      if (n_parc > 0 && !.est_ad()) {
+        showModal(modalDialog(
+          title = "Supprimer le secteur",
+          easyClose = TRUE,
+          footer = modalButton("Fermer"),
           div(class = "alert alert-warning", style = "margin-bottom:0;",
               htmltools::HTML(glue::glue(
                 "Ce secteur contient <strong>{n_parc}</strong> parcelle(s). ",
-                "Retirez-les d'abord : la suppression d'un secteur ne doit pas ",
-                "emporter silencieusement son parcellaire et l'historique ",
-                "d'actions qui s'y rattache.")))
-        } else {
-          tags$p("Ce secteur ne contient aucune parcelle. Confirmer sa suppression ?")
-        }
-      ))
+                "Seul un administrateur peut supprimer un secteur qui en porte ; ",
+                "vous pouvez aussi les retirer d'abord.")))
+        ))
+        return(invisible(NULL))
+      }
+      secteur_a_supprimer(list(id = sid, libelle = inv$libelle))
+      showModal(modale_suppression_site(ns, inv, "supprimer_confirm", "supprimer_nom"))
+    })
+
+    observe({
+      cible <- secteur_a_supprimer()
+      req(cible)
+      shinyjs::toggleState("supprimer_confirm",
+                           condition = identical(trimws(input$supprimer_nom %||% ""),
+                                                 trimws(cible$libelle)))
     })
 
     observeEvent(input$supprimer_confirm, {
-      sid <- secteur_id()
-      if (is.null(sid) || is.na(sid) || !isTRUE(can_edit())) return(invisible(NULL))
-      ok <- tryCatch({
+      cible <- secteur_a_supprimer()
+      req(cible)
+      # Revérifié ici : le bouton grisé ne protège que l'interface. Le droit
+      # du responsable, lui, est revérifié dans la transaction (exiger_vide).
+      if (!identical(as.integer(secteur_id()), as.integer(cible$id)) || !isTRUE(can_edit()) ||
+          !identical(trimws(input$supprimer_nom %||% ""), trimws(cible$libelle))) {
+        return(invisible(NULL))
+      }
+      ad <- .est_ad()
+      shinybusy::show_modal_spinner(spin = "circle", color = COULEUR_SPINNER,
+                                    text = "🗑 Suppression en cours...")
+      on.exit(shinybusy::remove_modal_spinner(), add = TRUE)
+
+      bilan <- tryCatch(
         pool::poolWithTransaction(con, function(conn) {
-          # Les personnes rattachées au secteur partent avec lui. Leurs clés
-          # étrangères sont en NO ACTION : en oublier une, et la base refuse
-          # la suppression (animateurs et bénévoles l'étaient, cf. issue #8).
-          for (tbl in c("responsable_sites", "animateur_sites", "conservateur_benevole")) {
-            safe_db_execute(conn, glue::glue("
-              DELETE FROM gestcons.{tbl} WHERE site_id = {sid}
-            "))
-          }
-          n <- safe_db_execute(conn, glue::glue("
-            DELETE FROM gestcons.sites
-             WHERE id = {sid} AND type_site_id = {TYPE_SITE_SECTEUR}
-               AND NOT EXISTS (SELECT 1 FROM gestcons.parcelles_base p WHERE p.site_id = {sid})
-          "))
-          if (is.null(n) || n == 0) stop("Le secteur n'a pas pu être supprimé.")
+          supprimer_site_complet(conn, cible$id, TYPE_SITE_SECTEUR, docs_root,
+                                 exiger_vide = !ad)
+        }),
+        error = function(e) {
+          showToast("error", "Suppression impossible",
+                    paste("Rien n'a été supprimé :", conditionMessage(e)))
+          NULL
         })
-        TRUE
-      }, error = function(e) {
-        showToast("error", "Erreur de suppression", conditionMessage(e)); FALSE
-      })
-      if (!isTRUE(ok)) return(invisible(NULL))
+      if (is.null(bilan)) return(invisible(NULL))
+      for (chemin in bilan$fichiers) {
+        if (file.exists(chemin)) try(unlink(chemin, force = TRUE), silent = TRUE)
+      }
+
       removeModal()
-      log_action(session, current_user_rv,
-                 paste0("Stratégie foncière : secteur #", sid, " supprimé"))
+      secteur_a_supprimer(NULL)
+      log_action(session, current_user_rv, paste0(
+        "Stratégie foncière : suppression du secteur « ", cible$libelle, " » (id ", cible$id, ") : ",
+        bilan$n_actions, " action(s), ", bilan$n_prefig, " contrat de préfiguration"))
+
+      # Ses pastilles venaient du cache des coordonnées : sans l'invalider, le
+      # secteur resterait sur la carte jusqu'à son expiration.
+      invalidate_sites_coords_cache()
       secteur_id(NULL)
       refresh_secteurs(select = "")
-      showToast("warning", "Secteur supprimé", "Le secteur a été supprimé.")
+      if (!is.null(contrats_update_trigger)) {
+        contrats_update_trigger(isolate(contrats_update_trigger()) + 1L)
+      }
+
+      showToast("warning", "Secteur supprimé", paste0(
+        "🗑 Le secteur « ", cible$libelle, " » a été supprimé.",
+        if (nrow(bilan$contrats) > 0)
+          paste0(" ", nrow(bilan$contrats), " contrat(s) n'ont plus de parcelle : voir l'onglet Contrats.")
+        else ""))
     })
 
     invisible(NULL)

@@ -1172,7 +1172,8 @@ server <- function(input, output, session) {
     acteurs_existants = acteurs_existants_rv,
     zones_protection_data = zones_protection_global,
     dico_accessibilite = dico_accessibilite,
-    liste_communes     = liste_communes
+    liste_communes     = liste_communes,
+    docs_root          = docs_root
   )
 
   SITES_TAB <- "tab-sites"

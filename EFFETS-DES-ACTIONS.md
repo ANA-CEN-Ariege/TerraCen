@@ -134,9 +134,20 @@ incrémenté et le nouveau site est ouvert dans l'onglet Sites.
 
 ### Supprimer un secteur (`supprimer_confirm`)
 
-`responsable_sites`, `animateur_sites` et `conservateur_benevole`, puis
-`sites`, en une transaction. **Refusé si le secteur porte encore des
-parcelles** — le bouton de confirmation n'apparaît pas.
+**Même code que la suppression d'un site** (`supprimer_site_complet()`,
+helpers.R), donc même transaction, même ordre et mêmes exceptions : le
+secteur part avec ses parcelles et leurs liens, les actions qui n'avaient de
+parcelles que chez lui, son contrat de préfiguration s'il en a gardé un intact
+de quand il était un site, ses statuts et ses rôles. La confirmation
+inventorie ce qui partira, et ne s'active qu'une fois le nom du secteur tapé.
+
+**Droits** : un administrateur peut supprimer tout secteur ; son responsable,
+seulement un secteur **sans parcelle**. Ce second cas est revérifié dans la
+transaction, qui est refusée si des parcelles y sont arrivées entre-temps.
+
+Puis, la transaction validée : fichiers des actions supprimées effacés,
+cache des coordonnées invalidé, liste des secteurs rechargée, déclencheur
+global incrémenté.
 
 ---
 
