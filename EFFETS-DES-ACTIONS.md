@@ -134,7 +134,8 @@ incrémenté et le nouveau site est ouvert dans l'onglet Sites.
 
 ### Supprimer un secteur (`supprimer_confirm`)
 
-`responsable_sites` puis `sites`. **Refusé si le secteur porte encore des
+`responsable_sites`, `animateur_sites` et `conservateur_benevole`, puis
+`sites`, en une transaction. **Refusé si le secteur porte encore des
 parcelles** — le bouton de confirmation n'apparaît pas.
 
 ---
