@@ -53,12 +53,28 @@ En **une transaction**, jusqu'à neuf écritures sur cinq tables :
 
 Puis : cache des coordonnées invalidé, sélecteur de sites rechargé.
 
-### Supprimer un site
+### Supprimer un site (`supprimer_site_confirm`)
 
-**Aucun chemin dans l'interface.** La suppression passe par
-`scripts/delete_site.sql`, qui purge dans l'ordre les liaisons de contrats,
-d'actions et de protection, les sources géométriques, les périmètres manuels,
-les parcelles, les rôles, les statuts, puis le site.
+**Administrateur seulement**, depuis le bouton « Supprimer ce site » de la
+fiche. La confirmation inventorie ce qui partira, et ne s'active qu'une fois
+le nom du site tapé.
+
+En **une transaction**, dans l'ordre des clés étrangères, celui de
+`scripts/delete_site.sql` :
+
+1. Les liens des parcelles du site : contrats fonciers et agricoles, actions foncières et agricoles, protections, sources géométriques.
+2. Les **actions dont toutes les parcelles étaient sur ce site** : leurs documents, leurs liens d'acteurs et d'utilisateurs, puis l'action.
+3. Le **contrat de préfiguration**, s'il est resté tel que la création du site l'a fait : même nom, même remarque, ni acteur, ni document, ni parcelle sur un autre site.
+4. `parcelles_base` — le trigger `trg_del_perimetre_manuel` purge le polygone des parcelles manuelles —, et `parcelles_perimetre_old` tant qu'elle existe.
+5. `docs_gestion_sites`, `sites_statuts`, `responsable_sites`, `conservateur_benevole`, `animateur_sites`, `carto_habitat`, `ouverture_public_sites`, puis `sites`.
+
+Puis, la transaction validée : fichiers des actions supprimées effacés du
+disque, cache des coordonnées invalidé, sélecteur de sites et liste des
+contrats rechargés, déclencheur global incrémenté.
+
+> **Jamais supprimés** : les autres contrats, même sans plus aucune parcelle —
+> la confirmation les nomme, pour qu'on les traite dans l'onglet Contrats —,
+> et les documents de gestion, dont seul le lien au site part.
 
 ---
 

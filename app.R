@@ -1092,7 +1092,8 @@ server <- function(input, output, session) {
     current_user_rv = current_user,
     user_roles,
     zones_protection_data = zones_protection_global,
-    dico_accessibilite = dico_accessibilite
+    dico_accessibilite = dico_accessibilite,
+    docs_root = docs_root
   )
   
   contrats_handle <- contrats_server(

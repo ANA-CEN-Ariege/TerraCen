@@ -129,6 +129,11 @@ duree_type_maitrise <- function(libelle) {
 TYPE_SITE_CONSERVATOIRE <- 1L
 TYPE_SITE_SECTEUR       <- 2L
 
+# Remarque du contrat de préfiguration que reçoit chaque site à sa création
+# (mod_sites.R, .create_default_contrat). La suppression d'un site s'en sert
+# pour le reconnaître : c'est le seul contrat qu'elle peut supprimer.
+REMARQUE_CONTRAT_PREFIGURATION <- "Contrat provisoire créé automatiquement à la création du site."
+
 SOURCE_GEOM_PCI      <- 4L  # plan cadastral informatisé — parcelle cadastrale
 SOURCE_GEOM_MANUELLE <- 2L  # numérisation manuelle CEN — polygone dessiné
 
