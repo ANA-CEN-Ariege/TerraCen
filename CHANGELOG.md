@@ -5,6 +5,72 @@ Toutes les modifications notables sont consignées ici.
 Le format est inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet adhère à un schéma [SemVer light](CONTRIBUTING.md#versioning-et-releases) (`MAJEUR.MINEUR[.PATCH]`).
 
+## [3.12] — 2026-11-22
+
+Première version du dépôt public. Un administrateur peut supprimer un site,
+et un secteur se supprime désormais avec ses parcelles.
+
+**Aucune migration.**
+
+### Ajouté
+- **Supprimer un site.** Un administrateur trouve le bouton « 🗑 Supprimer
+  ce site » dans la fiche d'un site existant. La confirmation liste ce qui
+  partira, nomme les contrats qui n'auront plus aucune parcelle et les
+  documents de gestion qui ne seront plus rattachés à aucun site, et ne
+  s'active qu'une fois le nom du site tapé. Partent avec le site : ses
+  parcelles et sa continuité, avec leurs liens ; les actions qui n'avaient de
+  parcelles que sur ce site, avec leurs documents ; son contrat de
+  préfiguration s'il est resté tel que la création l'a fait (40 des 63
+  sites) ; ses statuts, ses rôles et ses liens aux documents de gestion.
+  Restent tous les autres contrats, même sans plus aucune parcelle, et les
+  documents de gestion. Tout ou rien, en une transaction (issue #8).
+- **Zoomer sur une commune dans la Stratégie foncière**, comme dans l'onglet
+  Sites et au même endroit, sous le bouton de modification.
+
+### Modifié
+- **Un secteur se supprime avec ses parcelles.** Il fallait jusqu'ici les
+  retirer d'abord. La suppression est la même que pour un site : ses
+  parcelles et leurs liens, les actions qui n'avaient de parcelles que chez
+  lui, son contrat de préfiguration s'il en a gardé un intact de quand il
+  était un site (37 secteurs), ses statuts et ses rôles. Confirmation par le
+  nom tapé. Un administrateur peut supprimer tout secteur ; son responsable,
+  seulement un secteur sans parcelle, comme avant.
+- **Le zoom sur une commune est un champ où l'on tape**, dans Sites comme
+  dans la Stratégie foncière, comme le sélecteur juste au-dessus : il
+  n'ouvre plus de zone de recherche au-dessous.
+
+### Corrigé
+- **Supprimer un secteur échouait dès qu'il avait un animateur ou un
+  bénévole** : seuls ses responsables étaient effacés avant lui. 28 secteurs
+  ont un animateur et 10 un bénévole, hérités des sites basculés en secteurs.
+  Le message du commit `cf06e83` dit « trois » secteurs avec un animateur :
+  c'est 28.
+
+### Dépôt
+- **Le code est public**, sur `ANA-CEN-Ariege/TerraCen`, sous licence GNU
+  GPL v3 (`LICENSE`) ; l'application reste interne. L'ancien dépôt,
+  `TerraCen-historique`, est archivé et reste privé ; ses issues ouvertes
+  ont été recréées ici. Son historique et ses tags ne sont pas repris :
+  v3.12 est le premier tag de ce dépôt.
+- Les scripts ponctuels et les rapports d'audit sortent de git, vers
+  `scripts/local/`, ignoré.
+- La teinte rose de la priorité 2 reconnaît son utilisateur à son
+  identifiant, plus à son adresse. Rien ne change à l'écran.
+- Le bot Matrix n'annonce plus que les issues et les PR des membres du dépôt.
+- `README.md` à jour des onglets, du code et du déploiement ; `CONTRIBUTING.md`
+  présente le déploiement par `deploy.sh`.
+
+### Technique
+- **La suppression d'un site et celle d'un secteur sont un seul code**, dans
+  `helpers.R` : `inventaire_suppression_site()`, `supprimer_site_complet()`
+  et `modale_suppression_site()`. Les fichiers des actions supprimées ne
+  sont effacés du disque qu'une fois la transaction validée.
+- La remarque du contrat de préfiguration devient une constante,
+  `REMARQUE_CONTRAT_PREFIGURATION`, partagée par sa création et sa
+  suppression.
+- `docs_root` est passé aux modules Sites et Stratégie foncière, en dernier
+  paramètre et par son nom.
+
 ## [3.11] — 2026-10-30
 
 Les sites disent s'ils sont accessibles au public, et aux personnes à
